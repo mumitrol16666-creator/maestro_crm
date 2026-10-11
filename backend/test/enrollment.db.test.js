@@ -132,6 +132,19 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal((await req(`/${e.id}`)).data.enrollment.readyForLesson, false);
         assert.equal((await req(`/${e.id}/complete`, {})).status, 502);
     });
+    test('a lost provision response can repair the exact student link without changing a password', async () => {
+        const e = await start(); const original = await prisma.student.findUnique({ where: { id: student.id } });
+        const mock = express(); mock.get('/api/integration/v1/family/:id', (_req, res) => res.json({ data: { student: { id: 'qa-platform-student', isActive: true }, parents: [] } }));
+        const lp = await new Promise(resolve => { const srv = mock.listen(0, '127.0.0.1', () => resolve(srv)); });
+        const oldUrl = process.env.LEARNING_PLATFORM_API_URL; process.env.LEARNING_PLATFORM_API_URL = `http://127.0.0.1:${lp.address().port}`;
+        try {
+            assert.equal((await req(`/${e.id}/access/student-link`, {})).status, 200);
+            const linked = await prisma.student.findUnique({ where: { id: student.id } });
+            assert.equal(linked.appUserId, 'qa-platform-student'); assert.equal(linked.password, original.password);
+            await prisma.student.update({ where: { id: student.id }, data: { appUserId: 'different-student' } });
+            assert.equal((await req(`/${e.id}/access/student-link`, {})).status, 409);
+        } finally { process.env.LEARNING_PLATFORM_API_URL = oldUrl; await new Promise(resolve => lp.close(resolve)); }
+    });
     test('age boundary follows Aktobe calendar date', () => {
         assert.equal(isMinor('2008-10-12', new Date('2026-10-11T19:01:00Z')), false);
         assert.equal(isMinor('2008-10-12', new Date('2026-10-11T18:59:00Z')), true);

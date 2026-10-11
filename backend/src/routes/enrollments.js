@@ -88,7 +88,8 @@ router.post('/:id/access/:kind', run(async (req, res) => {
     const e = await service.enrollmentView(req.params.id);
     let result;
     try {
-        if (req.params.kind === 'student') result = await access.studentAccess(e, req.body);
+        if (req.params.kind === 'student-link') result = await access.repairStudentLink(e);
+        else if (req.params.kind === 'student') result = await access.studentAccess(e, req.body);
         else if (req.params.kind === 'parent') result = await access.parentAccess(e, req.body, req.user.id);
         else throw service.fail('Неизвестное действие.');
         await prisma.enrollment.update({ where: { id: e.id }, data: { lastAccessError: null } });

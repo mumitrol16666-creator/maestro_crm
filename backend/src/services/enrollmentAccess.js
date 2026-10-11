@@ -15,6 +15,16 @@ async function platform(path, data) {
     }
 }
 async function familyAccess(e) { return platform(`/family/${encodeURIComponent(e.studentId)}`); }
+async function repairStudentLink(e) {
+    const family = await familyAccess(e);
+    if (!family.student?.isActive) throw fail('Действующий кабинет ученика не найден.', 409);
+    await prisma.$transaction(async tx => {
+        const current = await require('./enrollment').locked(tx, e.id);
+        if (current.student.appUserId && current.student.appUserId !== family.student.id) throw fail('В CRM связан другой кабинет. Сначала проверьте связь в карточке ученика.', 409);
+        await tx.student.update({ where: { id: e.studentId }, data: { appUserId: family.student.id, externalLinkStatus: 'linked', linkedAt: new Date() } });
+    });
+    return { created: false, appUserId: family.student.id };
+}
 async function studentAccess(e, input) {
     if (typeof input.password !== 'string' || input.password.length < 8 || Buffer.byteLength(input.password, 'utf8') > 72) throw fail('Пароль ученика: от 8 символов, не более 72 байт.');
     const result = await provisionCrmStudent(e.studentId, { password: input.password, preserveExistingPassword: true });
@@ -35,4 +45,4 @@ async function parentAccess(e, input, actorId) {
         details: 'Администратор подтвердил личность и родительский доступ', metadata: { studentId: e.studentId, parentUserId: result.parent.id, linkId: result.linkId } } });
     return result;
 }
-module.exports = { platform, familyAccess, studentAccess, parentAccess };
+module.exports = { platform, familyAccess, studentAccess, repairStudentLink, parentAccess };

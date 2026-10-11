@@ -49,12 +49,16 @@ cp .env.example .env   # DATABASE_URL, JWT_SECRET
 npm install
 npx prisma db push
 node scripts/init-maestro-config.js   # направления + кабинеты
-node create-super-admin.js 77001234567 YourPassword
+node create-super-admin.js +77001234567 --password-stdin < /secure/path/admin-password
 npm run dev
 
 cd ../frontend
 python3 -m http.server 8000
 ```
+
+Пароль администратора задаётся явно через стандартный ввод: 12–72 байта (не менее 12 символов). Файл с паролем должен быть доступен только владельцу (`chmod 600`) и находиться вне репозитория. Не передавайте пароль аргументом команды. Создание не меняет существующих пользователей с таким номером.
+
+Для восстановления существующего действующего администратора используйте `node reset-admin.js <точный-ID-карточки> --password-stdin < /secure/path/admin-password`. Меняется только его пароль, старые сессии отзываются. Роль и статус не меняются. Роли меняются через CRM под супер-администратором. Старый массовый `prisma/seed.js` отключён; для отдельной локальной QA-базы есть `npm run db:seed:qa` с проверкой окружения.
 
 ### Аварийная очистка тестовых операционных данных
 

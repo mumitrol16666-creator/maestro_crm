@@ -23,7 +23,7 @@ cp .env.example .env          # DATABASE_URL, JWT_SECRET
 npm install
 npx prisma db push
 node scripts/init-maestro-config.js
-node create-super-admin.js 77001234567 YourPassword
+node create-super-admin.js +77001234567 --password-stdin < /secure/path/admin-password
 npm run dev
 ```
 
@@ -33,9 +33,11 @@ npm run dev
 |--------|------------|
 | `scripts/init-maestro-config.js` | Направления + кабинеты |
 | `create-super-admin.js` | Создать супер-админа |
-| `make-admin.js` | Сменить роль пользователя |
-| `reset-admin.js` | Сброс пароля тестового админа |
+| `make-admin.js` | Отключён; роли меняются через CRM под супер-администратором |
+| `reset-admin.js` | Сброс пароля действующего администратора по точному ID, пароль только из stdin |
 | `scripts/health-check.sh` | Проверка API + PM2 |
+
+Правила подготовки файла пароля и восстановления доступа описаны в [README](README.md). Скрипты не используют пароли по умолчанию и не меняют существующему пользователю роль при создании администратора.
 
 ## Контакты на фронте
 

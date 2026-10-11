@@ -1,0 +1,18 @@
+node_modules
+.env
+.env.*
+*.env
+*.log
+*.dump
+**/*.sql
+!prisma/migrations/**
+backups
+uploads
+sessions
+scratch
+test
+coverage
+.git
+.DS_Store
+# scripts/ and Prisma migrations remain available to the explicitly local
+# Dockerfile.learning-local. The production Dockerfile uses explicit COPY.

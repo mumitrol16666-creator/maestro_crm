@@ -1,6 +1,9 @@
 name: Deploy Maestro Ecosystem
 
 on:
+  pull_request:
+    branches:
+      - main
   push:
     branches:
       - main
@@ -21,6 +24,23 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  verify-production-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build and inspect production image
+        run: |
+          printf 'MUST_NOT_SHIP=fixture\n' > backend/.env
+          docker build -t maestro-crm-image-check backend
+          docker run --rm --entrypoint node maestro-crm-image-check -e '
+            const fs = require("fs"), assert = require("assert/strict");
+            for (const path of [".env", "create-super-admin.js", "reset-admin.js", "make-admin.js", "prisma/seed.js", "scripts/qa-seed.js", "test"]) assert.equal(fs.existsSync(path), false, path);
+            for (const path of ["src/server.js", "prisma/schema.prisma", "prisma/migrations/20260831010000_baseline_remote_main/migration.sql"]) assert.equal(fs.existsSync(path), true, path);
+            assert.equal(process.env.NODE_ENV, "production");
+            assert.equal(typeof require("@prisma/client").PrismaClient, "function");
+          '
+
   verify-crm:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -96,7 +116,7 @@ jobs:
 
   deploy:
     if: github.event_name == 'workflow_dispatch'
-    needs: verify-crm
+    needs: [verify-crm, verify-production-image]
     runs-on: ubuntu-latest
     timeout-minutes: 45
 

@@ -90,6 +90,10 @@ function requiredPermissions(req, targetRole) {
         if (action === 'add-to-group') add('canManageGroups', 'canManageSchedule');
         if (['balance-adjustment', 'finish-education'].includes(action)) add('canManagePayments');
     }
+    if (resource === 'subscription-periods') {
+        add('canManageStudents', 'canManagePayments');
+        if (parts.includes('release-schedule')) add('canManageSchedule', 'canManageGroups');
+    }
     if (resource === 'enrollments') {
         add('canManageStudents');
         if (req.method === 'PUT' || ['payment-intents', 'activate', 'complete'].includes(action)) add('canManagePayments');

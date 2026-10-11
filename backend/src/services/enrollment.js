@@ -113,7 +113,7 @@ async function preparePayment(id, input, actorId) {
         const e = await locked(tx, id);
         const pending = await tx.enrollmentPaymentIntent.findFirst({ where: { enrollmentId: id, paymentId: null, cancelledAt: null } });
         if (pending) return pending;
-        if (e.completedAt) {
+        if (e.completedAt || e.membershipId) {
             const paid = await paidFor(tx, id);
             const remainder = Math.max(0, (e.terms?.totalPrice || 0) - paid.amount);
             if (!remainder || payload.amount > remainder) throw fail('Первое оформление завершено. Здесь можно внести только оставшуюся доплату за этот период; новую покупку оформляйте отдельно.', 409);
@@ -128,6 +128,10 @@ async function confirmPayment(id, intentId, actorId) {
         if (!intent || intent.cancelledAt) throw fail('Оплата не найдена или черновик отменён.', 404);
         if (intent.paymentId) return { paymentId: intent.paymentId, repeated: true };
         const p = intent.payload;
+        if (e.membershipId || e.completedAt) {
+            const paid = await paidFor(tx, id);
+            if (p.amount > Math.max(0, (e.terms?.totalPrice || 0) - paid.amount)) throw fail('Размер доплаты изменился. Отмените черновик и обновите расчёт.', 409);
+        }
         const payment = await recordReceivedPayment(tx, { studentId: e.studentId, parsedAmount: p.amount,
             normalizedType: 'membership_full', actorId, notes: `Оформление ${e.id}. Плательщик: ${p.payer}. ${p.notes}`,
             paymentDate: new Date(p.paymentDate), normalizedPaymentMethod: p.paymentMethod });
@@ -143,7 +147,8 @@ async function confirmPayment(id, intentId, actorId) {
 }
 async function paidFor(tx, id) {
     const intents = await tx.enrollmentPaymentIntent.findMany({ where: { enrollmentId: id, paymentId: { not: null } } });
-    const payments = await tx.payment.findMany({ where: { id: { in: intents.map(i => i.paymentId) } }, include: { relatedPayments: { select: { amount: true, status: true } } } });
+    const enrollment = await tx.enrollment.findUnique({ where: { id }, select: { membershipId: true } });
+    const payments = await tx.payment.findMany({ where: { relatedPaymentId: null, isCancellation: false, OR: [{ id: { in: intents.map(i => i.paymentId) } }, ...(enrollment?.membershipId ? [{ membershipId: enrollment.membershipId }] : [])] }, include: { relatedPayments: { select: { amount: true, status: true } } } });
     return { intents, payments, amount: payments.reduce((sum, p) => sum + (p.status === 'completed' ? Math.max(0, p.amount - p.relatedPayments.filter(x => x.status === 'refunded').reduce((n, x) => n + x.amount, 0)) : 0), 0) };
 }
 async function activateEnrollment(id, actorId) {

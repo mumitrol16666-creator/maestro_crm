@@ -169,9 +169,11 @@
         if (busy) return;
         const version = ++openVersion; shell('Оформления и доплаты'); state = null; step = null;
         try {
-            const { enrollments } = await api('/enrollments');
+            const [{ enrollments }, { rows }] = await Promise.all([api('/enrollments'), api('/subscription-periods/attention')]);
             if (version !== openVersion || !root.isConnected) return;
             root.querySelector('#enrollmentContent').innerHTML = enrollments.length ? `<div class="enrollment-queue">${enrollments.map(e => `<button type="button" data-student="${h(e.studentId)}"><span>${h(fio(e.student))}</span><small>${h(e.nextStep)}</small></button>`).join('')}</div>` : '<p>Незавершённых оформлений нет. Откройте карточку ученика и нажмите «Продолжить оформление».</p>';
+            root.querySelector('#enrollmentContent').insertAdjacentHTML('beforeend', `<h3>Контроль абонементов</h3><p>CRM показывает сроки и задолженность. Продление, приостановка и снятие с расписания выполняются администратором.</p><div class="enrollment-queue">${rows.map(row => `<button type="button" data-period-student="${h(row.student.id)}"><span>${h(fio(row.student))}</span><small>${row.messages.map(h).join(' ')}</small></button>`).join('') || '<p>Нет задач по доплатам и срокам.</p>'}</div>`);
+            root.querySelectorAll('[data-period-student]').forEach(el => el.onclick = () => { root.remove(); window.openStudentPeriods(el.dataset.periodStudent); });
             root.querySelectorAll('[data-student]').forEach(el => el.onclick = () => window.openStudentEnrollment(el.dataset.student));
         } catch (err) { error(err.message); }
     };

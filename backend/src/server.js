@@ -10,7 +10,6 @@ const path = require('path');
 const { Server } = require('socket.io');
 const { connectDB, prisma } = require('./config/db');
 const { processHousekeeping } = require('./services/automation');
-const { restoreExpiredStudentPauses } = require('./services/studentPause');
 const { extendIndividualSchedules } = require('./services/individualScheduleExtension');
 const { processPendingCashTelegramNotifications } = require('./services/cashTelegramNotifications');
 const idempotency = require('./middleware/idempotency');
@@ -26,14 +25,6 @@ if (process.env.NODE_ENV !== 'test') {
     cron.schedule('0 * * * *', () => {
         console.log('⏰ [CRON] Запуск housekeeping занятий...');
         processHousekeeping();
-    });
-    // Временная пауза заканчивается автоматически на следующий час после даты окончания.
-    cron.schedule('5 * * * *', () => {
-        restoreExpiredStudentPauses()
-            .then(result => {
-                if (result.restored) console.log(`⏰ [CRON] Возвращено с паузы учеников: ${result.restored}`);
-            })
-            .catch(error => console.error('⚠️ [CRON] Ошибка завершения пауз:', error));
     });
     cron.schedule('15 * * * *', () => {
         extendIndividualSchedules()
@@ -218,6 +209,7 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/enrollments', require('./routes/enrollments'));
+app.use('/api/subscription-periods', require('./routes/subscriptionPeriods'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/directions', require('./routes/directions'));

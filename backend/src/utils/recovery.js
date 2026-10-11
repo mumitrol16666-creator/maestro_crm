@@ -67,17 +67,8 @@ async function autoRecoverStudent(studentId, actorUserId, opts = {}) {
             },
         });
 
-        // Сбросим legacy-поля ручной отметки, если они были установлены ранее.
-        await client.student.update({
-            where: { id: studentId },
-            data: {
-                lostAt: null,
-                lostReason: null,
-                lostMarkedById: null,
-                pausedUntil: null,
-                status: 'active',
-            },
-        });
+        // Payment attribution is a statistic, never authorization to resume education.
+        // Student status, pause and departure fields are changed only by explicit admin actions.
         return true;
     } catch (err) {
         if (opts.tx) throw err;

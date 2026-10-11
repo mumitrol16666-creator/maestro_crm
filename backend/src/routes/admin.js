@@ -289,7 +289,7 @@ router.post('/operational-reset', authenticate, requireSuperAdmin, async (req, r
         });
     } catch (error) {
         console.error('Operational reset error:', error);
-        const status = error.code === 'RESET_IN_PROGRESS' ? 409 : 500;
+        const status = ['RESET_IN_PROGRESS', 'BALANCE_HISTORY_PROTECTED'].includes(error.code) ? 409 : 500;
         res.status(status).json({
             success: false,
             error: error.code === 'RESET_IN_PROGRESS'

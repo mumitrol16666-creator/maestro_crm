@@ -1,4 +1,5 @@
 const { prisma } = require('../config/db');
+const { recordBalanceMovement } = require('./studentBalanceLedger');
 const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
 const {
@@ -758,10 +759,11 @@ async function adminApproveClass(crmClassId, payload = {}) {
                     if (result.chargeAmount !== undefined) amount = result.chargeAmount;
                 } else throw new Error('Для списания необходим тариф ученика');
 
-                const student = await tx.student.update({
-                    where: { id: attendee.studentId },
-                    data: { accountBalance: { decrement: amount } },
-                    select: { accountBalance: true },
+                const movement = await recordBalanceMovement(tx, {
+                    studentId: attendee.studentId, amount: -amount, kind: 'lesson_charge', sourceType: 'class', sourceId: classRecord.id,
+                    reason: `Подтверждение урока: ${classRecord.title}`, operationKey: `lesson-charge:${result.transactionId}`,
+                    effectiveAt: classRecord.date,
+                    metadata: { membershipId, membershipTransactionId: result.transactionId, attendeeId: attendee.id },
                 });
 
                 await tx.classAttendee.update({
@@ -777,8 +779,8 @@ async function adminApproveClass(crmClassId, payload = {}) {
                 deductions.push({
                     studentId: attendee.studentId,
                     amount,
-                    balanceAfter: student.accountBalance,
-                    debtCreated: student.accountBalance < 0,
+                    balanceAfter: movement.balanceAfter,
+                    debtCreated: movement.balanceAfter < 0,
                     ...result,
                 });
             }

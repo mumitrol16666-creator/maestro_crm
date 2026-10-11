@@ -78,7 +78,8 @@ if (!process.env.TEST_DATABASE_URL) {
         await prisma.class.deleteMany({ where: { title: marker } });
         await prisma.membership.deleteMany({ where: { studentId: { in: studentIds } } });
         await prisma.group.deleteMany({ where: { id: { in: groupIds } } });
-        await prisma.student.deleteMany({ where: { id: { in: studentIds } } });
+        // Account openings are immutable too. Leave these uniquely named
+        // fixtures until the disposable test database is recreated.
         await prisma.$disconnect();
     });
 

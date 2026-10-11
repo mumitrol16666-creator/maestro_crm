@@ -1813,6 +1813,7 @@ async function viewStudent(id) {
             window.switchStudentDetailTab?.('overview');
         }
         currentViewingStudentId = id;
+        window.initStudentBalanceLedger?.(id);
         currentViewingStudentStatus = null;
         currentViewingStudentRecord = null;
         const token = getAuthToken();
@@ -4288,8 +4289,11 @@ window.openBalanceAdjustmentModal = async function() {
         return;
     }
 
+    const studentId = currentViewingStudentId;
     try {
-        const response = await fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+        const saved = getPendingFinancialDraft(`${API_URL}/students/${studentId}/balance-adjustment`, 'POST', '{}');
+        const draft = saved ? JSON.parse(saved.body) : null;
+        const response = await fetch(`${API_URL}/students/${studentId}`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         });
         const result = await response.json();
@@ -4328,7 +4332,7 @@ window.openBalanceAdjustmentModal = async function() {
                 ? -rawAmount
                 : rawAmount;
 
-            const adjustResponse = await fetch(`${API_URL}/students/${currentViewingStudentId}/balance-adjustment`, {
+            const adjustResponse = await fetch(`${API_URL}/students/${studentId}/balance-adjustment`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${getAuthToken()}`,
@@ -4345,8 +4349,9 @@ window.openBalanceAdjustmentModal = async function() {
             }
             toast.success(adjustResult.message || 'Баланс скорректирован');
             invalidateCache('dashboard', 'students');
-            await viewStudent(currentViewingStudentId);
+            await viewStudent(studentId);
         });
+        if (draft) restoreMoneyOperationDraft({ amount: Math.abs(draft.amount), direction: draft.amount < 0 ? 'decrease' : 'increase', reason: draft.reason });
     } catch (error) {
         toast.error(error.message);
     }

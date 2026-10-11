@@ -1,3 +1,4 @@
+const { updateTestStudent } = require('./helpers/studentFixtures');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -396,7 +397,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -448,7 +449,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -485,7 +486,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -668,7 +669,7 @@ if (!process.env.TEST_DATABASE_URL) {
                     paymentMethod: TEST_PAYMENT_METHOD,
                 },
             }),
-            prisma.student.update({
+            updateTestStudent(prisma, {
                 where: { id: student.id },
                 data: { accountBalance: 9000 },
             }),
@@ -1144,7 +1145,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 3000 },
         });

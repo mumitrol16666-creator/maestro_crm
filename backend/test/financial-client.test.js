@@ -49,6 +49,23 @@ test('uncertain response cannot silently be retried with another amount', async 
     assert.equal(page.storage.size, 1);
 });
 
+test('manual balance correction reuses the pending key after reload and rejects a changed reason', async () => {
+    const endpoint = 'http://localhost:5001/api/students/student-1/balance-adjustment';
+    const storage = new Map();
+    const keys = [];
+    const request = { method: 'POST', body: JSON.stringify({ amount: -2000, reason: 'Сверка по документу' }) };
+    let page = browser(async (_, options) => { keys.push(options.headers.get('X-Idempotency-Key')); throw new Error('offline'); }, storage);
+    await assert.rejects(() => page.fetch(endpoint, request), /offline/);
+    page = browser(async (_, options) => {
+        keys.push(options.headers.get('X-Idempotency-Key'));
+        return Response.json({ success: true });
+    }, storage);
+    await assert.rejects(() => page.fetch(endpoint, { ...request, body: JSON.stringify({ amount: -2000, reason: 'Другая причина' }) }), /предыдущей денежной операции/);
+    await page.fetch(endpoint, request);
+    assert.equal(keys[0], keys[1]);
+    assert.equal(storage.size, 0);
+});
+
 test('truncated JSON leaves the draft, validation rejection clears it', async () => {
     const storage = new Map();
     let page = browser(async () => new Response('{', { status: 201 }), storage);

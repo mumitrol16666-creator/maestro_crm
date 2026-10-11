@@ -1,6 +1,7 @@
 const { prisma } = require('../config/db');
 const { isRateCard } = require('./rateCards');
 const { outstandingClassCharges } = require('./classChargeLedger');
+const { reverseLessonBalance } = require('./studentBalanceLedger');
 const { outstandingClassFreezes, freezeLedgerConflict } = require('./classFreezeLedger');
 const { syncOfflineLessonEventToLearningPlatform } = require('./learningPlatformNotifications');
 const {
@@ -33,16 +34,14 @@ async function reverseClassCharges(classRecord, actorId, tx) {
         if (!attendee.studentId) continue;
 
         if (attendee.chargeAmount > 0) {
-            const student = await tx.student.update({
-                where: { id: attendee.studentId },
-                data: { accountBalance: { increment: attendee.chargeAmount } },
-                select: { accountBalance: true },
+            const movement = await reverseLessonBalance(tx, {
+                attendee, classRecord, actorId, reason: `Откат подтверждения урока: ${classRecord.title}`,
             });
             reversals.push({
                 studentId: attendee.studentId,
                 type: 'balance',
                 amount: attendee.chargeAmount,
-                balanceAfter: student.accountBalance,
+                balanceAfter: movement.balanceAfter,
             });
         }
 

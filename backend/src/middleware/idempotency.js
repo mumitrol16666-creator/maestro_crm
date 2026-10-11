@@ -7,6 +7,7 @@ const createIdempotencyMiddleware = (db = prisma) => async (req, res, next) => {
     // transaction as the balance. The short-lived HTTP cache cannot own them.
     const requestPath = req.path || req.originalUrl;
     if (/^\/api\/payments(?:\/|\?|$)/i.test(requestPath)) return next();
+    if (/^\/api\/students\/[^/]+\/balance-adjustment\/?(?:\?|$)/i.test(requestPath)) return next();
     const rawKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];
     if (!rawKey) {
         return next();

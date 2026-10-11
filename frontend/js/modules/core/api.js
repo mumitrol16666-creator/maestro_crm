@@ -30,7 +30,7 @@ function mutationChangesCashbox(url) {
 }
 
 function financialDraftStorageKey(url, method, body) {
-    if (!/\/payments(?:\/refund|\/[^/?]+)?(?:\?.*)?$/.test(url)) return null;
+    if (!/\/(?:payments(?:\/refund|\/[^/?]+)?|students\/[^/?]+\/balance-adjustment)(?:\?.*)?$/.test(url)) return null;
     if (!['POST', 'PATCH', 'DELETE'].includes(method)) return null;
     let actor = 'unknown';
     try {

@@ -13,6 +13,7 @@ const { normalizePaymentMethod } = require('../services/paymentMethods');
 const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
 const { createCashTransaction } = require('../services/cashTelegramNotifications');
 const { financialRequestKey, runFinancialRequest, financialError } = require('../services/financialRequest');
+const { recordBalanceMovement } = require('../services/studentBalanceLedger');
 
 function sendFinancialError(res, error, fallback) {
     return res.status(error.statusCode || 500).json({
@@ -188,9 +189,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             });
 
             // Денежный баланс независим от абонемента: любое зачисление пополняет его.
-            await tx.student.update({
-                where: { id: studentId },
-                data: { accountBalance: { increment: parsedAmount } }
+            await recordBalanceMovement(tx, {
+                studentId, amount: parsedAmount, kind: 'payment', sourceType: 'payment', sourceId: created.id,
+                actorId: req.user.id, reason: notes?.trim() || 'Полученная оплата обучения',
+                operationKey: `payment:${created.id}`, effectiveAt: created.paymentDate,
             });
 
             // Создаем запись в кассе
@@ -352,9 +354,12 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
             const effectivePaymentDate = parsedDate || payment.paymentDate;
             if (difference !== 0 && student) {
-                await tx.student.update({
-                    where: { id: payment.studentId },
-                    data: { accountBalance: { increment: difference } },
+                const movement = await recordBalanceMovement(tx, {
+                    studentId: payment.studentId, amount: difference, kind: 'payment_correction',
+                    sourceType: 'payment', sourceId: payment.id, actorId: req.user.id,
+                    reason: notes?.trim() || `Исправление суммы оплаты: ${payment.amount} → ${parsedAmount} ₸`,
+                    operationKey: `payment-edit:${payment.id}:${req.user.id}:${requestKey}`,
+                    metadata: { oldAmount: payment.amount, newAmount: parsedAmount },
                 });
 
                 await tx.activityLog.create({
@@ -369,8 +374,8 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                             oldAmount: payment.amount,
                             newAmount: parsedAmount,
                             balanceAdjustment: difference,
-                            balanceBefore: student.accountBalance,
-                            balanceAfter: (student.accountBalance || 0) + difference,
+                            balanceBefore: movement.balanceBefore,
+                            balanceAfter: movement.balanceAfter,
                             note: notes?.trim() || null,
                         },
                     },
@@ -500,10 +505,6 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 throw error;
             }
 
-            await tx.student.update({
-                where: { id: studentId },
-                data: { accountBalance: { decrement: parsedAmount } },
-            });
             const created = await tx.payment.create({
                 data: {
                     studentId,
@@ -516,6 +517,11 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     paymentMethod: normalizedPaymentMethod,
                     paymentDate: new Date(),
                 },
+            });
+            await recordBalanceMovement(tx, {
+                studentId, amount: -parsedAmount, kind: 'payment_refund', sourceType: 'payment', sourceId: created.id,
+                actorId: req.user.id, reason: reason.trim(), operationKey: `payment:${created.id}`,
+                effectiveAt: created.paymentDate, metadata: { originalPaymentId: originalPaymentId || null },
             });
             await createCashTransaction(tx, {
                 type: 'expense',
@@ -599,17 +605,18 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             await tx.$queryRaw`
                 SELECT id FROM "Student" WHERE id = ${payment.studentId} FOR UPDATE
             `;
-            await tx.student.update({
-                where: { id: payment.studentId },
-                data: { accountBalance: { decrement: payment.amount } }
-            });
-
             const reversal = await tx.payment.create({ data: {
                 studentId: payment.studentId, managerId: req.user.id,
                 amount: payment.amount, type: payment.type, status: 'refunded',
                 relatedPaymentId: payment.id, paymentMethod: payment.paymentMethod,
                 isCancellation: true, notes: reason,
             } });
+            await recordBalanceMovement(tx, {
+                studentId: payment.studentId, amount: -payment.amount, kind: 'payment_cancellation',
+                sourceType: 'payment', sourceId: reversal.id, actorId: req.user.id, reason,
+                operationKey: `payment:${reversal.id}`, effectiveAt: reversal.paymentDate,
+                metadata: { originalPaymentId: payment.id },
+            });
 
             await createCashTransaction(tx, {
                 type: 'expense',

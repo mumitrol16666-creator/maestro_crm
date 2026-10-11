@@ -22,6 +22,8 @@ const {
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { projectStudent, canViewStudentFinancials, studentContactSelect } = require('../services/studentProjection');
 const { parseMoney, MAX_MONEY_AMOUNT } = require('../services/paymentPolicy');
+const { recordBalanceMovement } = require('../services/studentBalanceLedger');
+const { financialRequestKey, runFinancialRequest } = require('../services/financialRequest');
 const {
     normalizeNotificationFlag,
     assertUniqueNotificationRoutes,
@@ -1297,6 +1299,7 @@ router.get('/:id/stats', authenticate, async (req, res) => {
 // Не создает платеж и не попадает в кассу/аналитику доходов.
 router.post('/:id/balance-adjustment', authenticate, requireAdmin, async (req, res) => {
     try {
+        const requestKey = financialRequestKey(req);
         const adjustmentAmount = parseSignedBalanceAmount(req.body?.amount);
         const reason = String(req.body?.reason || '').trim();
 
@@ -1307,11 +1310,13 @@ router.post('/:id/balance-adjustment', authenticate, requireAdmin, async (req, r
             return res.status(400).json({ success: false, error: 'Укажите причину корректировки' });
         }
 
-        const result = await prisma.$transaction(async tx => {
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey, actorId: req.user.id, operation: `balance-adjustment:${req.params.id}`, payload: req.body,
+        }, async tx => {
             const lockedStudents = await tx.$queryRaw`
                 SELECT id, name, "lastName", "middleName", "accountBalance"
                 FROM "Student"
-                WHERE id = ${req.params.id}
+                WHERE id = ${req.params.id} AND role = 'student'
                 FOR UPDATE
             `;
             const student = lockedStudents[0];
@@ -1321,11 +1326,10 @@ router.post('/:id/balance-adjustment', authenticate, requireAdmin, async (req, r
                 throw error;
             }
 
-            const balanceBefore = Number(student.accountBalance || 0);
-            const balanceAfter = balanceBefore + adjustmentAmount;
-            await tx.student.update({
-                where: { id: student.id },
-                data: { accountBalance: balanceAfter },
+            const { balanceBefore, balanceAfter } = await recordBalanceMovement(tx, {
+                studentId: student.id, amount: adjustmentAmount, kind: 'manual_adjustment',
+                sourceType: 'manual_adjustment', sourceId: student.id, actorId: req.user.id, reason,
+                operationKey: `adjustment:${student.id}:${req.user.id}:${requestKey}`,
             });
 
             await tx.activityLog.create({
@@ -1345,23 +1349,51 @@ router.post('/:id/balance-adjustment', authenticate, requireAdmin, async (req, r
                 },
             });
 
-            return { student, balanceBefore, balanceAfter };
+            return { status: 200, body: {
+                success: true, studentId: student.id, adjustment: adjustmentAmount, balanceBefore, balanceAfter,
+                message: `Баланс скорректирован: ${formatSignedMoney(adjustmentAmount)}. Новый баланс ${balanceAfter} ₸`,
+            } };
         });
-
-        res.json({
-            success: true,
-            studentId: result.student.id,
-            adjustment: adjustmentAmount,
-            balanceBefore: result.balanceBefore,
-            balanceAfter: result.balanceAfter,
-            message: `Баланс скорректирован: ${formatSignedMoney(adjustmentAmount)}. Новый баланс ${result.balanceAfter} ₸`,
-        });
+        res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('Balance adjustment error:', error);
         if (error.code === 'STUDENT_NOT_FOUND') {
             return res.status(404).json({ success: false, error: error.message });
         }
-        res.status(500).json({ success: false, error: 'Не удалось скорректировать баланс' });
+        res.status(error.statusCode || 500).json({ success: false, code: error.code,
+            error: error.statusCode ? error.message : 'Не удалось скорректировать баланс' });
+    }
+});
+
+// The authoritative post-cutover balance history. Opening is a carried balance,
+// never a new payment; it stays explicitly marked until historical reconciliation.
+router.get('/:id/balance-ledger', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const beforePosition = req.query.before === undefined ? null : Number(req.query.before);
+        if (beforePosition !== null && (!Number.isSafeInteger(beforePosition) || beforePosition < 0)) {
+            return res.status(400).json({ success: false, error: 'Некорректная страница журнала' });
+        }
+        const result = await prisma.$transaction(async tx => {
+            const student = await tx.student.findUnique({ where: { id: req.params.id, role: 'student' }, select: { id: true, accountBalance: true } });
+            if (!student) return null;
+            const where = { studentId: student.id };
+            const [rows, sums, reviewCount, opening] = await Promise.all([
+                tx.studentBalanceEntry.findMany({ where: { ...where, ...(beforePosition === null ? {} : { position: { lt: beforePosition } }) }, orderBy: { position: 'desc' }, take: 51 }),
+                tx.studentBalanceEntry.aggregate({ where, _sum: { amount: true }, _count: true }),
+                tx.studentBalanceEntry.count({ where: { ...where, needsReview: true } }),
+                tx.studentBalanceEntry.findUnique({ where: { studentId_position: { studentId: student.id, position: 0 } } }),
+            ]);
+            return { entries: rows.slice(0, 50), nextBefore: rows.length > 50 ? rows[49].position : null,
+                summary: { balance: student.accountBalance, ledgerBalance: sums._sum.amount || 0,
+                    entriesCount: sums._count, needsReviewCount: reviewCount,
+                    consistent: Boolean(opening) && student.accountBalance === (sums._sum.amount || 0),
+                    openingAmount: opening?.amount ?? null, openedAt: opening?.recordedAt ?? null } };
+        }, { isolationLevel: 'RepeatableRead' });
+        if (!result) return res.status(404).json({ success: false, error: 'Ученик не найден' });
+        res.json({ success: true, ...result });
+    } catch (error) {
+        console.error('Balance ledger error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось прочитать журнал баланса' });
     }
 });
 

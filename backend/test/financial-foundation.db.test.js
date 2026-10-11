@@ -1,3 +1,4 @@
+const { updateTestStudent } = require('./helpers/studentFixtures');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
@@ -107,7 +108,7 @@ if (!process.env.TEST_DATABASE_URL) {
     });
 
     test('student write replay after role change cannot return an old privileged card', async () => {
-        await prisma.student.update({ where: { id: student.id }, data: { accountBalance: 12500, monthlySalary: 12345 } });
+        await updateTestStudent(prisma, { where: { id: student.id }, data: { accountBalance: 12500, monthlySalary: 12345 } });
         const path = `/../../API/STUDENTS/${student.id}`;
         const options = { method: 'PUT', body: {}, key: randomUUID(), authToken: token(admin) };
         const first = await request(path, options);
@@ -212,7 +213,7 @@ if (!process.env.TEST_DATABASE_URL) {
     test('departure preserves positive balances and debt; permanent deletion cannot erase history', async () => {
         const payment = (await post()).body.payment;
         for (const amount of [4000, -12000]) {
-            await prisma.student.update({ where: { id: student.id }, data: { accountBalance: amount, status: 'active' } });
+            await updateTestStudent(prisma, { where: { id: student.id }, data: { accountBalance: amount, status: 'active' } });
             const departure = await request(`/students/${student.id}/finish-education`, { method: 'POST', body: { reason: 'moved' } });
             assert.equal(departure.status, 200, JSON.stringify(departure));
             assert.equal(await balance(), amount);
@@ -224,7 +225,7 @@ if (!process.env.TEST_DATABASE_URL) {
     });
 
     test('role projection protects card, update, list and print; admin employee editor still works', async () => {
-        await prisma.student.update({ where: { id: student.id }, data: { accountBalance: 12500, monthlySalary: 12345 } });
+        await updateTestStudent(prisma, { where: { id: student.id }, data: { accountBalance: 12500, monthlySalary: 12345 } });
         const forbidden = ['password', 'accountBalance', 'accountBalanceInitializedAt', 'monthlySalary', 'salaryIndividual',
             'salesCommissionPercent', 'payrollEnabled', 'employmentStartDate', 'staffPosition', 'debtAmount',
             'lastPaymentDate', 'memberships', 'payments', 'balanceCoverage', 'activeMembership'];

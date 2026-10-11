@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Maestro CRM production deploy. Runs on the VPS for one immutable release SHA.
 set -euo pipefail
+umask 077
 
 APP_DIR="/var/www/maestro_crm"
 PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-app-maestro-school.duckdns.org}"
@@ -71,6 +72,23 @@ chmod 700 "$BACKUP_DIR" "$STATE_DIR"
 database_url="${DATABASE_URL%%\?*}"
 backup_path="$BACKUP_DIR/crm-before-${RELEASE_SHA}-$(date +%Y%m%d-%H%M%S).dump"
 
+log "Generating Prisma client..."
+npx prisma generate --config=prisma.config.ts
+
+ledger_cutover=0
+ledger_snapshot_before="$STATE_DIR/balances-before-${RELEASE_SHA}.json"
+ledger_snapshot_after="$STATE_DIR/balances-after-${RELEASE_SHA}.json"
+ledger_table="$(psql "$database_url" -v ON_ERROR_STOP=1 -Atqc "SELECT to_regclass('public.\"StudentBalanceEntry\"')::text")"
+if [ -z "$ledger_table" ]; then
+  log "Balance ledger cutover: stopping CRM writes before snapshot and backup..."
+  if pm2 describe maestro-crm-backend >/dev/null 2>&1; then
+    pm2 stop maestro-crm-backend
+  fi
+  ledger_cutover=1
+  trap 'log "Deployment failed during balance cutover. Keep CRM stopped; do not start old code or restore over new payments."' ERR
+  node scripts/audit-student-balance-ledger.js --snapshot > "$ledger_snapshot_before"
+fi
+
 log "Creating and validating PostgreSQL backup..."
 docker run --rm --network host \
   --user "$(id -u):$(id -g)" \
@@ -86,9 +104,6 @@ sha256sum "$backup_path" > "${backup_path}.sha256"
 chmod 600 "$backup_path" "${backup_path}.sha256"
 find "$BACKUP_DIR" -name 'crm-before-*.dump' -type f -mtime +30 -delete 2>/dev/null || true
 find "$BACKUP_DIR" -name 'crm-before-*.dump.sha256' -type f -mtime +30 -delete 2>/dev/null || true
-
-log "Generating Prisma client..."
-npx prisma generate --config=prisma.config.ts
 
 migration_table="$(psql "$database_url" -Atqc "SELECT to_regclass('public._prisma_migrations')::text" || true)"
 if [ "$migration_table" != "_prisma_migrations" ]; then
@@ -111,6 +126,12 @@ fi
 log "Applying versioned Prisma migrations..."
 npm run db:migrate:deploy
 npx prisma migrate status --config=prisma.config.ts
+
+if [ "$ledger_cutover" -eq 1 ]; then
+  log "Verifying every carried balance before restarting CRM..."
+  node scripts/audit-student-balance-ledger.js --compare-with "$ledger_snapshot_before" > "$ledger_snapshot_after"
+  trap - ERR
+fi
 
 log "Unified program pricing is installed by the versioned migration."
 

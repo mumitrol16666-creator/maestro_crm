@@ -1,6 +1,14 @@
 // Read-only: snapshot before cutover, reconcile after it. Never repairs money.
 const { createHash } = require('node:crypto');
 
+function verifyCutover(before, after) {
+    if (!Array.isArray(before?.snapshot?.students) || !Array.isArray(after?.snapshot?.students)
+        || after.consistent !== true || JSON.stringify(before.snapshot) !== JSON.stringify(after.snapshot)) {
+        throw new Error('BALANCE_CUTOVER_MISMATCH: balances changed or the journal does not reconcile; keep writes stopped');
+    }
+    return true;
+}
+
 async function auditBalanceLedger(db, { snapshotOnly = false } = {}) {
     return db.$transaction(async tx => {
         await tx.$executeRaw`SET TRANSACTION READ ONLY`;
@@ -44,9 +52,17 @@ if (require.main === module) {
     require('dotenv').config();
     const { prisma } = require('../src/config/db');
     auditBalanceLedger(prisma, { snapshotOnly: process.argv.includes('--snapshot') })
-        .then(result => { console.log(JSON.stringify(result, null, 2)); if (result.consistent === false) process.exitCode = 1; })
+        .then(result => {
+            const compareIndex = process.argv.indexOf('--compare-with');
+            if (compareIndex !== -1) {
+                const before = JSON.parse(require('node:fs').readFileSync(process.argv[compareIndex + 1], 'utf8'));
+                verifyCutover(before, result);
+            }
+            console.log(JSON.stringify(result, null, 2));
+            if (result.consistent === false) process.exitCode = 1;
+        })
         .catch(error => { console.error(error.message); process.exitCode = 1; })
         .finally(() => prisma.$disconnect());
 }
 
-module.exports = { auditBalanceLedger };
+module.exports = { auditBalanceLedger, verifyCutover };

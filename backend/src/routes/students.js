@@ -1531,6 +1531,7 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                 await tx.group.update({ where: { id: groupId }, data: { currentStudents: { increment: 1 } } });
             }
             await linkOpenBookingsForStudent(tx, created, req.user.id);
+            await tx.enrollment.create({ data: { studentId: created.id, responsibleId: req.user.id } });
             return created;
         });
 

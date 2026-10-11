@@ -1,8 +1,8 @@
+const { recordReceivedPayment } = require('../services/receivedPayment');
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
-const { autoRecoverStudent } = require('../utils/recovery');
 const {
     parsePositiveMoney,
     calculatePaymentAdjustment,
@@ -157,76 +157,10 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const outcome = await runFinancialRequest(prisma, {
             key: requestKey, actorId: req.user.id, operation: 'payment:create', payload: req.body,
         }, async tx => {
-            const lockedStudents = await tx.$queryRaw`
-                SELECT id, name, "lastName", "middleName", "accountBalance" FROM "Student" WHERE id = ${studentId} AND role = 'student' FOR UPDATE
-            `;
-            const student = lockedStudents[0];
-            if (!student) {
-                const error = new Error('Ученик не найден');
-                error.code = 'STUDENT_NOT_FOUND';
-                error.statusCode = 404;
-                throw error;
-            }
-
-            await autoRecoverStudent(studentId, req.user.id, {
-                tx, source: 'payment', atDate: paymentDate,
-                note: `Платёж ${parsedAmount}₸ (${normalizedType})`,
+            const created = await recordReceivedPayment(tx, {
+                studentId, parsedAmount, normalizedType, actorId: req.user.id,
+                teacherId, notes, paymentDate, normalizedPaymentMethod,
             });
-
-            const created = await tx.payment.create({
-                data: {
-                    studentId,
-                    amount: parsedAmount,
-                    type: normalizedType,
-                    membershipId: null,
-                    managerId: req.user.id,
-                    teacherId: teacherId || null,
-                    notes: notes || '',
-                    status: 'completed',
-                    paymentDate,
-                    paymentMethod: normalizedPaymentMethod
-                }
-            });
-
-            // Денежный баланс независим от абонемента: любое зачисление пополняет его.
-            await recordBalanceMovement(tx, {
-                studentId, amount: parsedAmount, kind: 'payment', sourceType: 'payment', sourceId: created.id,
-                actorId: req.user.id, reason: notes?.trim() || 'Полученная оплата обучения',
-                operationKey: `payment:${created.id}`, effectiveAt: created.paymentDate,
-            });
-
-            // Создаем запись в кассе
-            await createCashTransaction(tx, {
-                type: 'income',
-                amount: parsedAmount,
-                category: 'payment',
-                description: `Оплата обучения: ${formatPaymentPersonName(student)}`.trim(),
-                date: created.paymentDate,
-                createdById: req.user.id,
-                relatedPaymentId: created.id,
-                paymentMethod: normalizedPaymentMethod,
-                notes: notes || ''
-            });
-
-            // Реальные деньги на балансе закрывают пробную заявку как продажу.
-            await tx.booking.updateMany({
-                where: {
-                    convertedToStudentId: studentId,
-                    requestType: 'trial',
-                    status: { not: 'sold' },
-                },
-                data: {
-                    status: 'sold',
-                    trialFunnelStage: 'sold',
-                    trialNextAction: 'none',
-                    trialNextActionAt: null,
-                    lossReason: null,
-                    lossStage: null,
-                    lostAt: null,
-                },
-            });
-
-            await syncFirstPaymentBonusForStudent(tx, studentId);
             return { status: 201, body: { success: true, payment: { ...created, _id: created.id } } };
         });
         res.status(outcome.status).json(outcome.body);

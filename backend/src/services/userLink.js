@@ -522,6 +522,7 @@ async function provisionCrmTeacher(crmTeacherId, options = {}) {
             middleName: teacher.middleName || '',
             email: teacher.email,
             password: options.password || undefined,
+            preserveExistingPassword: options.preserveExistingPassword || undefined,
             bio: teacher.teacherBio || undefined,
         });
     } catch (err) {
@@ -600,6 +601,7 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
             dateOfBirth: student.dateOfBirth || null,
             email: student.email,
             password: options.password || undefined,
+            preserveExistingPassword: options.preserveExistingPassword || undefined,
         });
     } catch (err) {
         const message = err.response?.data?.error?.message

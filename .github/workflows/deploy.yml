@@ -104,6 +104,7 @@ jobs:
           node --check frontend/js/modules/phase2/phase2Dialogs.js
           node --check frontend/js/modules/schedule/schedule.js
           node --check frontend/js/modules/salary.js
+          node --check frontend/js/modules/students/enrollment.js
           node --check frontend/js/modules/users/users.js
           node --check backend/src/routes/integration.js
           node --check backend/src/services/userLink.js

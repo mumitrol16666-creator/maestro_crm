@@ -143,6 +143,7 @@
             document.head.appendChild(script);
         })();
     </script>
+    <link rel="stylesheet" href="/css/enrollment.css?v=2">
 </head>
 
 <body class="admin-body" data-viewport="">
@@ -656,7 +657,7 @@
         <!-- Students Section -->
         <section class="admin-section hidden" id="section-students">
             <div class="section-header">
-                <!-- Ученики добавляются через конвертацию заявок -->
+                <button type="button" class="btn-primary" onclick="openEnrollmentQueue()">Незавершённые оформления</button>
             </div>
 
             <div class="filters-search-row">
@@ -3377,12 +3378,13 @@
     <script src="/js/modules/memberships/actions.js?v=10"></script>
     <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
     <script src="/js/modules/whatsapp/inbox.js?v=2"></script>
-    <script src="/js/modules/bookings/bookings.js?v=154"></script>
+    <script src="/js/modules/bookings/bookings.js?v=155"></script>
     <script src="/js/modules/students/student-balance-ledger.js?v=1"></script>
-    <script src="/js/modules/students/students.js?v=207"></script>
+    <script src="/js/modules/students/students.js?v=208"></script>
     <script src="/js/modules/students/student-print.js?v=2"></script>
+    <script src="/js/modules/students/enrollment.js?v=3"></script>
     <script src="/js/modules/groups/groups.js?v=128"></script>
-    <script src="/js/modules/users/users.js?v=139"></script>
+    <script src="/js/modules/users/users.js?v=140"></script>
     <script src="/js/modules/system/operational-reset.js?v=4"></script>
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=140"></script>

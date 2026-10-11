@@ -2040,6 +2040,7 @@ function initBookingConversion() {
                 }).then(r => r.json());
 
                 if (convertData.success) {
+                    if (convertData.alreadyConverted) { closeConvertBookingModal(); await openStudentEnrollment(convertData.student.id); return; }
                     const pwd = convertData.generatedPassword || 'changeme123';
                     const studentName = convertData.student.name;
                     const studentPhone = convertData.student.phone;

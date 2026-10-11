@@ -183,6 +183,7 @@ model Student {
   offerAcceptedAt             DateTime?
   accountBalance              Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
   accountBalanceInitializedAt DateTime?
+  enrollments                 Enrollment[]
   balanceEntries              StudentBalanceEntry[]
   penaltyPoints               Int          @default(0)
   studentAvatar               String?
@@ -669,6 +670,7 @@ model ClassAttendee {
 }
 
 model Membership {
+  enrollment       Enrollment?
   id               String   @id @default(cuid())
   billingModel     String   @default("legacy")
   tariffName       String?
@@ -781,6 +783,7 @@ model MembershipTransaction {
 }
 
 model Payment {
+  enrollmentIntent            EnrollmentPaymentIntent?
   id                          String           @id @default(cuid())
   studentId                   String
   studentName                 String?
@@ -1650,4 +1653,61 @@ model StudentBalanceEntry {
 
   @@unique([studentId, position])
   @@index([studentId, sourceType, sourceId])
+}
+
+// First enrollment is resumable across administrators and devices. Renewal is a separate purchase.
+model Enrollment {
+  id                 String   @id @default(cuid())
+  studentId          String   @unique
+  student            Student  @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  responsibleId      String
+  revision           Int      @default(0)
+  customer           Json?
+  terms              Json?
+  membershipId       String?  @unique
+  membership         Membership? @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  activatedAt        DateTime?
+  studentHandedAt    DateTime?
+  parentHandedAt     DateTime?
+  parentUserId       String?
+  lastAccessError    String?
+  completedAt        DateTime?
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+  documents          EnrollmentDocument[]
+  paymentIntents     EnrollmentPaymentIntent[]
+  @@index([completedAt, updatedAt])
+}
+
+model EnrollmentDocument {
+  id                 String   @id @default(cuid())
+  enrollmentId       String
+  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  number             Int      @unique @default(autoincrement())
+  revision           Int
+  templateVersion    String
+  snapshot           Json
+  html               String   @db.Text
+  preparedById       String
+  createdAt          DateTime @default(now())
+  printedAt          DateTime?
+  contractSignedAt   DateTime?
+  appendixSignedAt   DateTime?
+  consentSignedAt    DateTime?
+  signedById         String?
+  @@unique([enrollmentId, revision])
+}
+
+model EnrollmentPaymentIntent {
+  id                 String   @id @default(uuid())
+  enrollmentId       String
+  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  payload            Json
+  createdById        String
+  paymentId          String?  @unique
+  payment            Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  cancelledAt        DateTime?
+  createdAt          DateTime @default(now())
+  confirmedAt        DateTime?
+  @@index([enrollmentId, createdAt])
 }

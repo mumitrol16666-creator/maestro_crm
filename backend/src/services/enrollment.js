@@ -185,7 +185,7 @@ async function enrollmentView(id, db = prisma) {
     if (!e) throw fail('Оформление не найдено', 404);
     const [paid, membership, nextLesson, charged] = await Promise.all([
         paidFor(db, id), e.membershipId ? db.membership.findUnique({ where: { id: e.membershipId } }) : null,
-        db.class.findFirst({ where: { status: 'scheduled', AND: [{ OR: [{ date: { gt: new Date(`${today()}T00:00:00Z`) } }, { date: new Date(`${today()}T00:00:00Z`), startTime: { gte: new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Aqtobe', hour: '2-digit', minute: '2-digit' }).format(new Date()) } }] }],
+        db.class.findFirst({ where: { status: 'scheduled', isPractice: false, AND: [{ OR: [{ date: { gt: new Date(`${today()}T00:00:00Z`) } }, { date: new Date(`${today()}T00:00:00Z`), startTime: { gte: new Intl.DateTimeFormat('en-GB', { timeZone: 'Asia/Aqtobe', hour: '2-digit', minute: '2-digit' }).format(new Date()) } }] }],
             OR: [{ individualStudentId: e.studentId }, { attendees: { some: { studentId: e.studentId } } }, { group: { students: { some: { studentId: e.studentId, status: 'active' } } } }] },
             orderBy: [{ date: 'asc' }, { startTime: 'asc' }], select: { id: true, title: true, date: true, startTime: true, duration: true, teacherId: true, teacher: { select: { name: true, lastName: true, middleName: true, role: true, status: true } }, classType: true, group: { select: { billingType: true } } } }),
         e.membershipId ? db.classAttendee.findMany({ where: { chargedMembershipId: e.membershipId, studentId: e.studentId, chargeAmount: { gt: 0 } }, select: { classId: true } }) : [],

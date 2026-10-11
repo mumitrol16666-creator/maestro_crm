@@ -124,6 +124,9 @@ if (!process.env.TEST_DATABASE_URL) {
         const teacher = await person({ role: 'teacher' });
         const tomorrow = new Date(`${today()}T00:00:00Z`); tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
         const lesson = await prisma.class.create({ data: { title: 'Первый урок', classType: 'individual', individualStudentId: student.id, date: tomorrow, startTime: '14:00', endTime: '14:45', duration: 45, teacherId: teacher.id } });
+        await prisma.class.create({ data: { title: 'Репетиция', classType: 'individual', isPractice: true, individualStudentId: student.id,
+            date: tomorrow, startTime: '12:00', endTime: '12:45', duration: 45, teacherId: teacher.id } });
+        assert.equal((await req(`/${e.id}`)).data.enrollment.nextLesson.id, lesson.id, 'practice does not replace the first teaching lesson');
         assert.equal((await req(`/${e.id}`)).data.enrollment.readyForLesson, true);
         const membershipId = (await req(`/${e.id}`)).data.enrollment.membership.id;
         await prisma.membership.update({ where: { id: membershipId }, data: { lessonRates: { individual: { price: 6000 } } } });

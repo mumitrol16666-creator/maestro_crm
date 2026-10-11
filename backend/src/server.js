@@ -19,44 +19,7 @@ const idempotency = require('./middleware/idempotency');
 
 
 if (process.env.NODE_ENV !== 'test') {
-    connectDB().then(async () => {
-        // Migration logic for permissions using Prisma
-        try {
-            const rolesToFix = ['sales_manager', 'admin', 'super_admin'];
-            for (const role of rolesToFix) {
-                const doc = await prisma.rolePermissions.findUnique({ where: { role } });
-                if (doc && doc.visibility) {
-                    const nextVisibility = { ...doc.visibility };
-                    let changed = false;
-                    if (!nextVisibility.bot) {
-                        nextVisibility.bot = true;
-                        changed = true;
-                    }
-                    if (['admin', 'super_admin'].includes(role) && !nextVisibility.integration_logs) {
-                        nextVisibility.integration_logs = true;
-                        changed = true;
-                    }
-                    if (['admin', 'super_admin'].includes(role) && !nextVisibility.student_history) {
-                        nextVisibility.student_history = true;
-                        changed = true;
-                    }
-                    if (!nextVisibility.shop) {
-                        nextVisibility.shop = true;
-                        changed = true;
-                    }
-                    if (!changed) continue;
-                    console.log(`🛠️ [MIGRATION] Fixing visibility for ${role}...`);
-                    await prisma.rolePermissions.update({
-                        where: { role },
-                        data: { visibility: nextVisibility }
-                    });
-                    console.log(`✅ [MIGRATION] ${role} visibility updated.`);
-                }
-            }
-        } catch (err) {
-            console.error('⚠️ [MIGRATION] Failed to update permissions:', err.message);
-        }
-    });
+    connectDB();
     // connectRedis(); // Uncomment when redis is setup
     
     // Housekeeping: not_filled для прошедших уроков без отчёта (без автосписания)

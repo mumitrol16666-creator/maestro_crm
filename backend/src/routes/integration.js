@@ -1104,20 +1104,10 @@ router.post('/classes/:crmClassId/return-to-teacher', async (req, res) => {
     }
 });
 
-router.post('/classes/:crmClassId/reopen', async (req, res) => {
-    try {
-        const result = await reopenClass(
-            req.params.crmClassId,
-            req.body?.crmAdminId || req.body?.actorId,
-            req.body?.reason,
-            req.body?.correction,
-        );
-        if (!result.success) return res.status(result.status || 400).json(result);
-        return res.json(result);
-    } catch (error) {
-        console.error('[integration] reopen class error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to reopen class' });
-    }
-});
+router.post('/classes/:crmClassId/reopen', (_req, res) => res.status(409).json({
+    success: false,
+    code: 'CRM_REOPEN_REQUIRED',
+    error: 'Пересмотр урока и возврат списания выполняются только в CRM.',
+}));
 
 module.exports = router;

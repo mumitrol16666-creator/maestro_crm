@@ -165,6 +165,7 @@ model Student {
   notifyPayments              Boolean?
   email                       String?      @unique
   password                    String
+  sessionVersion              Int          @default(0)
   gender                      Gender?
   role                        Role         @default(student)
   status                      EntityStatus @default(active)

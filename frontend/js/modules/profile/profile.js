@@ -195,6 +195,7 @@ function initPasswordChange() {
             const data = await response.json();
 
             if (response.ok && data.ok) {
+                if (data.token) localStorage.setItem('token', data.token);
                 msgEl.textContent = data.message || 'Пароль успешно изменён';
                 msgEl.className = 'success';
                 document.getElementById('currentPassword').value = '';

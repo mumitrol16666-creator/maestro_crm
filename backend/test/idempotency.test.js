@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 
 process.env.DATABASE_URL ||= 'postgresql://test:test@127.0.0.1:1/test';
 const { createIdempotencyMiddleware } = require('../src/middleware/idempotency');
+const authenticateFixture = (req, _res, next) => { req.user = { role: 'admin' }; next(); };
 
 function createResponse() {
     return {
@@ -48,7 +49,7 @@ test('одинаковый завершённый запрос получает 
             delete: async ({ where }) => stored.delete(where.key),
         },
     };
-    const middleware = createIdempotencyMiddleware(db);
+    const middleware = createIdempotencyMiddleware(db, authenticateFixture);
 
     let executions = 0;
     const firstResponse = createResponse();
@@ -85,7 +86,7 @@ test('параллельный дубль с тем же ключом получ
             delete: async () => {},
         },
     };
-    const middleware = createIdempotencyMiddleware(db);
+    const middleware = createIdempotencyMiddleware(db, authenticateFixture);
     let releaseFirst;
     const firstStarted = new Promise((resolve) => {
         releaseFirst = resolve;
@@ -121,7 +122,7 @@ test('ответ отправляется только после сохране
             delete: async () => {},
         },
     };
-    const middleware = createIdempotencyMiddleware(db);
+    const middleware = createIdempotencyMiddleware(db, authenticateFixture);
     const response = createResponse();
 
     await middleware(makeRequest('save-before-send'), response, () => {

@@ -1449,7 +1449,7 @@ function buildStudentProfileOverview(student) {
                     <span class="student-overview-meta__contact">${getWhatsappLink(safeStudent.phone)}</span>
                 </div>
                 ${safetyHTML}
-                ${typeof getUserRole === 'function' && ['admin', 'super_admin'].includes(getUserRole()) ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentEnrollment('${escapeHtml(getStudentId(safeStudent))}')">Продолжить оформление</button>` : ''}
+                ${typeof getUserRole === 'function' && ['admin', 'super_admin'].includes(getUserRole()) ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentEnrollment('${escapeHtml(getStudentId(safeStudent))}')">Продолжить оформление</button><button type="button" class="admin-btn btn-secondary" onclick="openStudentPeriods('${escapeHtml(getStudentId(safeStudent))}')">Абонементы и доплаты</button>` : ''}
             </div>
         </div>
 
@@ -3088,7 +3088,7 @@ function openStudentPausePeriodModal() {
                     <div class="form-group">
                         <label>ОКОНЧАНИЕ ПАУЗЫ</label>
                         <input type="date" class="admin-input" name="endDate" min="${todayISO}">
-                        <small style="opacity: 0.7; display: block; margin-top: 5px;">С датой расписание сохранится, а занятия на период паузы будут убраны из списка ученика.</small>
+                        <small style="opacity: 0.7; display: block; margin-top: 5px;">С датой расписание сохранится, а занятия на период паузы будут убраны из списка ученика. Вернуть ученика к занятиям может только администратор — дата и оплата сами этого не делают.</small>
                     </div>
                     <div style="display:flex; gap:10px; margin-top:20px;">
                         <button type="button" class="admin-btn btn-secondary" data-close-student-pause-modal style="flex:1;">ОТМЕНА</button>

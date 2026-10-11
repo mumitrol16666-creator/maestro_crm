@@ -671,6 +671,9 @@ model ClassAttendee {
 
 model Membership {
   enrollment       Enrollment?
+  renewalsFrom     SubscriptionRenewal[] @relation("RenewalSource")
+  renewedBy        SubscriptionRenewal? @relation("RenewalResult")
+  installmentIntents InstallmentIntent[]
   id               String   @id @default(cuid())
   billingModel     String   @default("legacy")
   tariffName       String?
@@ -784,6 +787,8 @@ model MembershipTransaction {
 
 model Payment {
   enrollmentIntent            EnrollmentPaymentIntent?
+  renewalPayment              SubscriptionRenewal?
+  installmentIntent           InstallmentIntent?
   id                          String           @id @default(cuid())
   studentId                   String
   studentName                 String?
@@ -1710,4 +1715,43 @@ model EnrollmentPaymentIntent {
   createdAt          DateTime @default(now())
   confirmedAt        DateTime?
   @@index([enrollmentId, createdAt])
+}
+
+// Admin prepares an immutable calculation, then explicitly confirms the purchase.
+model SubscriptionRenewal {
+  id                   String @id @default(uuid())
+  studentId            String
+  previousMembershipId String
+  previousMembership   Membership @relation("RenewalSource", fields: [previousMembershipId], references: [id], onDelete: Restrict)
+  membershipId         String? @unique
+  membership           Membership? @relation("RenewalResult", fields: [membershipId], references: [id], onDelete: Restrict)
+  paymentId            String? @unique
+  payment              Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  terms                Json
+  documentBasis        Json
+  creditAmount         Int
+  creditReason         String @db.Text
+  paymentPayload       Json
+  sourceSnapshot       Json
+  sourceHash           String
+  createdById          String
+  confirmedById        String?
+  createdAt            DateTime @default(now())
+  confirmedAt          DateTime?
+  cancelledAt          DateTime?
+  @@index([studentId, createdAt])
+}
+
+model InstallmentIntent {
+  id             String @id @default(uuid())
+  membershipId   String
+  membership     Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  payload        Json
+  createdById    String
+  paymentId      String? @unique
+  payment        Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  createdAt      DateTime @default(now())
+  confirmedAt    DateTime?
+  cancelledAt    DateTime?
+  @@index([membershipId, createdAt])
 }

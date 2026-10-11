@@ -1,4 +1,5 @@
 const express = require('express');
+const { recordBalanceMovement } = require('../services/studentBalanceLedger');
 const router = express.Router();
 const axios = require('axios');
 const {
@@ -2839,12 +2840,13 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
                         let balanceAfter = 0;
                         if (amount > 0) {
-                            const student = await tx.student.update({
-                                where: { id: studentId },
-                                data: { accountBalance: { decrement: amount } },
-                                select: { accountBalance: true }
+                            const movement = await recordBalanceMovement(tx, {
+                                studentId, amount: -amount, kind: 'lesson_charge', sourceType: 'class', sourceId: classRecord.id,
+                                actorId: req.user.id, reason: `Подтверждение урока: ${classRecord.title}`,
+                                operationKey: `lesson-charge:${result.transactionId}`, effectiveAt: classRecord.date,
+                                metadata: { membershipId, membershipTransactionId: result.transactionId, attendeeId: attendee.id },
                             });
-                            balanceAfter = student.accountBalance;
+                            balanceAfter = movement.balanceAfter;
                         } else {
                             const student = await tx.student.findUnique({
                                 where: { id: studentId },
@@ -3437,7 +3439,12 @@ router.post('/:id/postpone', authenticate, requireTeacherOrAdmin, async (req, re
                         ? { chargeAmount: resDeduct.chargeAmount, chargedMembershipId: resDeduct.membershipId, chargeSource: 'membership' }
                         : {};
                     if (programCharge.chargeAmount > 0) {
-                        await tx.student.update({ where: { id: studentId }, data: { accountBalance: { decrement: programCharge.chargeAmount } } });
+                        await recordBalanceMovement(tx, {
+                            studentId, amount: -programCharge.chargeAmount, kind: 'lesson_charge', sourceType: 'class', sourceId: classRecord.id,
+                            actorId: req.user.id, reason: `Платная отмена урока: ${classRecord.title}`,
+                            operationKey: `lesson-charge:${resDeduct.transactionId}`, effectiveAt: classRecord.date,
+                            metadata: { membershipId: resDeduct.membershipId, membershipTransactionId: resDeduct.transactionId },
+                        });
                     }
                     if (!attendee) {
                         attendee = await tx.classAttendee.create({

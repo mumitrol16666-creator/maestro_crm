@@ -1,3 +1,4 @@
+const { parseMoney, parsePositiveMoney } = require('../services/paymentPolicy');
 const express = require('express');
 const router = express.Router();
 const { authenticate, requireAdmin } = require('../middleware/auth');
@@ -166,7 +167,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: convertedStudentIds },
-                    status: 'completed',
+                    status: 'completed', cancelledAt: null,
                 },
                 select: {
                     id: true,
@@ -184,9 +185,9 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
                 firstPaymentByStudentId.set(payment.studentId, payment);
             }
         }
-        const manualBonusInput = Math.max(0, Number(req.body.bonus) || 0);
-        const manualFineInput = Math.max(0, Number(req.body.fine) || 0);
-        const manualAdvanceInput = Math.max(0, Number(req.body.advance) || 0);
+        const manualBonusInput = parseMoney(req.body.bonus ?? 0);
+        const manualFineInput = parseMoney(req.body.fine ?? 0);
+        const manualAdvanceInput = parseMoney(req.body.advance ?? 0);
         const existingSalarySnapshots = await prisma.salary.findMany({
             where: {
                 teacherId,
@@ -505,6 +506,7 @@ router.post('/calculate', authenticate, requireAdmin, async (req, res) => {
             }
         });
     } catch (error) {
+        if (error.code === 'INVALID_MONEY_AMOUNT') return res.status(400).json({ success: false, error: error.message, message: error.message });
         console.error('❌ Salary calculation error:', error);
         if (error.code === 'SALARY_CLASS_ALREADY_CALCULATED' || error.code === 'P2034') {
             return res.status(409).json({
@@ -969,7 +971,7 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
         } = req.body;
         const employeeId = req.body.employeeId || req.body.teacherId;
         const meta = SALARY_OPERATION_META[type];
-        const parsedAmount = Math.round(Number(amount) || 0);
+        const parsedAmount = parsePositiveMoney(amount);
         const operationDate = parseOperationDate(date);
         const periodKey = parseMonthKey(req.body.periodKey)
             || monthKeyFromDate(operationDate);
@@ -1098,6 +1100,7 @@ router.post('/operations', authenticate, requireAdmin, async (req, res) => {
                 : 'Операция сохранена без движения по кассе'
         });
     } catch (error) {
+        if (error.code === 'INVALID_MONEY_AMOUNT') return res.status(400).json({ success: false, error: error.message, message: error.message });
         console.error('❌ Create salary operation error:', error);
         if (error.code === 'SALARY_OPERATION_EXCEEDS_DUE') {
             return res.status(409).json({ success: false, message: error.message });

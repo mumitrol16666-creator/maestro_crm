@@ -64,7 +64,7 @@ async function renderPayments(filter = 'all', page = 1, search = '') {
                 <td>${paymentPersonName(payment.manager)}</td>
                 <td>${formatAmount(payment.amount)}</td>
                 <td>${getPaymentTypeText(payment.type)}${methodLabel ? `<br><small style="opacity:0.65;">${methodLabel}</small>` : ''}</td>
-                <td><span class="payment-status-badge status-${payment.status}">${getPaymentStatusText(payment.status)}</span></td>
+                <td><span class="payment-status-badge status-${payment.cancelledAt || payment.isCancellation ? 'cancelled' : payment.status}">${payment.isCancellation ? 'Отмена платежа' : getPaymentStatusText(payment.cancelledAt ? 'cancelled' : payment.status)}</span></td>
                 <td>
                     <button class="btn-icon" onclick="viewPaymentDetails('${payment._id}')" title="Детали">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -163,7 +163,7 @@ async function viewPaymentDetails(paymentId) {
             details += `Способ оплаты: ${payment.paymentMethod}\n`;
         }
         details += `Дата: ${formatDate(payment.paymentDate)}\n`;
-        details += `Статус: ${getPaymentStatusText(payment.status)}\n\n`;
+        details += `Статус: ${payment.isCancellation ? 'Отмена платежа' : getPaymentStatusText(payment.cancelledAt ? 'cancelled' : payment.status)}\n\n`;
         details += `Менеджер: ${paymentPersonName(payment.manager)}\n`;
         
         if (payment.teacher) {

@@ -164,7 +164,7 @@ const FIRST_SALE_PAYMENT_TYPES = ['membership_advance', 'membership_balance', 'm
 async function getFirstConfirmedSalesByStudent(from, to) {
     const payments = await prisma.payment.findMany({
         where: {
-            status: 'completed',
+            status: 'completed', cancelledAt: null,
             amount: { gt: 0 },
             type: { in: FIRST_SALE_PAYMENT_TYPES },
             paymentDate: { lte: to },
@@ -745,7 +745,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: trialStudentIdsInPeriod },
-                    status: 'completed',
+                    status: 'completed', cancelledAt: null,
                     amount: { gt: 0 },
                     type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
@@ -828,7 +828,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
         // --- Средний чек (non-trial membership покупки за период) ---
         const paymentsInPeriod = await prisma.payment.findMany({
             where: {
-                status: 'completed',
+                status: 'completed', cancelledAt: null,
                 type: { in: ['membership_full', 'membership_advance', 'membership_balance'] },
                 paymentDate: { gte: from, lte: to },
                 amount: { gt: 0 },
@@ -1042,7 +1042,7 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             WHERE s.role = 'student' AND s.status = 'active'
             AND COALESCE(
                 (SELECT MAX(p."paymentDate") FROM "Payment" p
-                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
+                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL AND p."cancelledAt" IS NULL AND p."isCancellation" = false),
                 s."createdAt"
             ) < ${lostThreshold}
         `;
@@ -1190,7 +1190,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
         // Платежи по teacherId (прямое поле)
         const teacherPayments = await prisma.payment.findMany({
             where: {
-                status: 'completed',
+                status: 'completed', cancelledAt: null,
                 teacherId: { in: teacherIds },
                 paymentDate: { gte: from, lte: to },
                 amount: { gt: 0 },
@@ -1221,7 +1221,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
             const ltvPayments = moneyActiveStudentIds.length ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: moneyActiveStudentIds },
-                    status: 'completed',
+                    status: 'completed', cancelledAt: null,
                     amount: { gt: 0 },
                     paymentDate: { gte: from, lte: to },
                 },
@@ -1272,7 +1272,7 @@ router.get('/teachers', authenticate, requireAdmin, async (req, res) => {
                     WHERE s.id IN (${Prisma.join(allStudentIds)})
                     AND COALESCE(
                         (SELECT MAX(p."paymentDate") FROM "Payment" p
-                         WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
+                         WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL AND p."cancelledAt" IS NULL AND p."isCancellation" = false),
                         s."createdAt"
                     ) < ${lostThreshold}
                 `;
@@ -1405,7 +1405,7 @@ router.get('/managers', authenticate, requireAdmin, async (req, res) => {
             const trialPayments = theirStudentIds.length ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: theirStudentIds },
-                    status: 'completed',
+                    status: 'completed', cancelledAt: null,
                     amount: { gt: 0 },
                     type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
@@ -1567,7 +1567,7 @@ router.get('/admins', authenticate, requireAdmin, async (req, res) => {
             const trialPayments = theirTrialStudentIds.length ? await prisma.payment.findMany({
                 where: {
                     studentId: { in: theirTrialStudentIds },
-                    status: 'completed',
+                    status: 'completed', cancelledAt: null,
                     amount: { gt: 0 },
                     type: { in: FIRST_SALE_PAYMENT_TYPES },
                 },
@@ -2386,7 +2386,7 @@ router.get('/student-profitability', authenticate, requireAdmin, async (req, res
         // 1. Получаем все выполненные платежи за период
         const payments = await prisma.payment.findMany({
             where: {
-                status: 'completed',
+                status: 'completed', cancelledAt: null,
                 paymentDate: { gte: from, lte: to }
             },
             select: {

@@ -12,7 +12,7 @@ const DAYS_PER_MONTH = 30.4375;
  * completedOnly — берём только status=completed.
  */
 function computeAvgCheck(payments, { completedOnly = true } = {}) {
-    const list = (payments || []).filter(p => !completedOnly || p.status === 'completed');
+    const list = (payments || []).filter(p => !completedOnly || (p.status === 'completed' && !p.cancelledAt));
     if (list.length === 0) return 0;
     const sum = list.reduce((acc, p) => acc + Number(p.amount || 0), 0);
     const uniqueStudents = new Set(list.map(p => p.studentId).filter(Boolean));
@@ -24,7 +24,7 @@ function computeAvgCheck(payments, { completedOnly = true } = {}) {
  * LTV на ученика: сумма всех completed-платежей одного ученика.
  */
 function computeLtv(payments, { completedOnly = true } = {}) {
-    const list = (payments || []).filter(p => !completedOnly || p.status === 'completed');
+    const list = (payments || []).filter(p => !completedOnly || (p.status === 'completed' && !p.cancelledAt));
     return list.reduce((acc, p) => acc + Number(p.amount || 0), 0);
 }
 

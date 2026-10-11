@@ -76,7 +76,7 @@ async function buildDailyAdminKpis(start, end, db = prisma) {
             by: ['managerId'],
             where: {
                 managerId: { in: adminIds },
-                status: 'completed',
+                status: 'completed', cancelledAt: null,
                 amount: { gt: 0 },
                 createdAt: { gte: start, lt: end },
             },

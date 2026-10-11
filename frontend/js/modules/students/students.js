@@ -167,7 +167,8 @@ function openFinishStudentEducationModal() {
             <button type="button" class="modal-close" data-close-departure-modal>×</button>
             <p class="student-departure-eyebrow">ЗАВЕРШЕНИЕ ОБУЧЕНИЯ</p>
             <h2>Перевести в бывшие ученики</h2>
-            <p class="student-departure-description">История уроков и оплат сохранится. Доступ, расписание, активные абонементы, группы и педагог будут сняты.</p>
+            <p class="student-departure-description">История уроков и оплат сохранится. Расписание, активные абонементы, группы и закреплённый педагог будут сняты.</p>
+            <p>Денежный баланс: ${formatAmount(currentViewingStudentRecord?.accountBalance || 0)}. Остаток или долг сохранится. Возврат оформляется отдельно.</p>
             <form id="finishStudentEducationForm">
                 <div class="form-group">
                     <label>ПРИЧИНА УХОДА *</label>
@@ -1812,6 +1813,7 @@ async function viewStudent(id) {
             window.switchStudentDetailTab?.('overview');
         }
         currentViewingStudentId = id;
+        window.initStudentBalanceLedger?.(id);
         currentViewingStudentStatus = null;
         currentViewingStudentRecord = null;
         const token = getAuthToken();
@@ -2302,7 +2304,7 @@ async function viewStudent(id) {
                             <div>
                                 <div style="font-weight: 500; color:${isRefund ? '#ef8585' : 'inherit'};">${isRefund ? '− ' : ''}${formatAmount(payment.amount)}</div>
                                 <div style="font-size: 0.85em; opacity: 0.6; margin-top: 2px;">
-                                    ${getPaymentTypeText(payment.type)}
+                                    ${payment.isCancellation ? 'Отмена платежа' : payment.cancelledAt ? 'Платёж отменён' : getPaymentTypeText(payment.type)}
                                     ${methodLabel ? ` <span style="font-size: 0.9em; opacity: 0.8; color: #60a5fa;">· ${methodLabel}</span>` : ''}
                                 </div>
                                 ${discountHtml}
@@ -2310,7 +2312,7 @@ async function viewStudent(id) {
                         </div>
                         <div class="student-payment-actions">
                             <span style="opacity: 0.5; font-size: 0.85em;">${date}</span>
-                            ${payment.status === 'completed' ? `
+                            ${payment.status === 'completed' && !payment.cancelledAt ? `
                                 <button type="button" onclick="openEditPaymentModal('${payment._id || payment.id}')">Изменить</button>
                                 <button type="button" class="is-refund" onclick="openRefundModal('${payment._id || payment.id}')">Возврат</button>
                             ` : ''}
@@ -4090,6 +4092,15 @@ async function openAddPaymentModal() {
 
         // Установить текущую дату
         document.getElementById('paymentDate').value = new Date().toISOString().split('T')[0];
+        const pendingPayment = getPendingFinancialDraft(`${API_URL}/payments`, 'POST', JSON.stringify({ studentId: currentViewingStudentId }));
+        if (pendingPayment) {
+            const draft = JSON.parse(pendingPayment.body);
+            document.getElementById('paymentAmount').value = draft.amount;
+            document.getElementById('paymentDate').value = draft.paymentDate;
+            document.getElementById('paymentNotes').value = draft.notes || '';
+            document.getElementById('paymentMethod').value = draft.paymentMethod || '';
+            toast.warning('Есть оплата без подтверждённого ответа. Повторное сохранение проверит её без повторного зачисления.');
+        }
 
         // Открыть модалку
         document.getElementById('addPaymentModal').classList.add('show');
@@ -4148,8 +4159,23 @@ function createMoneyOperationModal(title, body, onSubmit) {
     });
 }
 
+function restoreMoneyOperationDraft(draft) {
+    if (!draft) return;
+    const form = document.querySelector('#studentMoneyOperationModal form');
+    for (const [name, value] of Object.entries(draft)) {
+        const field = form?.elements.namedItem(name);
+        if (field) field.value = value ?? '';
+    }
+    const notice = document.createElement('div');
+    notice.className = 'info-notice';
+    notice.textContent = 'Восстановлена операция без подтверждённого ответа. Повторите отправку с прежними данными — повторного движения денег не будет.';
+    form?.prepend(notice);
+}
+
 window.openEditPaymentModal = async function(paymentId) {
     try {
+        const saved = getPendingFinancialDraft(`${API_URL}/payments/${paymentId}`, 'PATCH', '{}');
+        const draft = saved ? JSON.parse(saved.body) : null;
         const response = await fetch(`${API_URL}/payments/${paymentId}`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         });
@@ -4182,6 +4208,7 @@ window.openEditPaymentModal = async function(paymentId) {
             toast.success(updateResult.message);
             if (currentViewingStudentId) await viewStudent(currentViewingStudentId);
         });
+        restoreMoneyOperationDraft(draft);
     } catch (error) {
         toast.error(error.message);
     }
@@ -4189,9 +4216,13 @@ window.openEditPaymentModal = async function(paymentId) {
 
 window.openRefundModal = async function(originalPaymentId = '') {
     if (!currentViewingStudentId) return;
+    const studentId = currentViewingStudentId;
     try {
+        const saved = getPendingFinancialDraft(`${API_URL}/payments/refund`, 'POST', JSON.stringify({ studentId }));
+        const draft = saved ? JSON.parse(saved.body) : null;
+        if (draft) originalPaymentId = draft.originalPaymentId || '';
         const [studentResponse, paymentResponse] = await Promise.all([
-            fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+            fetch(`${API_URL}/students/${studentId}`, {
                 headers: { Authorization: `Bearer ${getAuthToken()}` },
             }),
             originalPaymentId
@@ -4207,19 +4238,19 @@ window.openRefundModal = async function(originalPaymentId = '') {
         const student = studentResult.student;
         const payment = paymentResult?.payment;
         const available = Math.max(0, Number(student.accountBalance) || 0);
-        if (available <= 0) {
+        if (!draft && available <= 0) {
             throw new Error('На балансе ученика нет средств, доступных для возврата');
         }
         const paymentAvailable = payment
             ? Math.max(0, Number(payment.refundableAmount ?? payment.amount) || 0)
             : available;
-        if (payment && paymentAvailable <= 0) {
+        if (!draft && payment && paymentAvailable <= 0) {
             throw new Error('Этот платёж уже полностью возвращён');
         }
         const suggested = Math.min(available, paymentAvailable);
         createMoneyOperationModal('ВОЗВРАТ СРЕДСТВ', `
             <div class="info-box"><strong>${renderStudentFioWithAge(student)}</strong><br><small>Доступно на балансе: ${formatAmount(available)}</small></div>
-            <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${available}" step="1" value="${suggested || 0}" required></div>
+            <div class="form-group"><label>СУММА ВОЗВРАТА (₸)</label><input class="admin-input" name="amount" type="number" min="1" max="${Math.max(available, Number(draft?.amount) || 0)}" step="1" value="${suggested || 0}" required></div>
             <div class="form-group"><label>СПОСОБ ВОЗВРАТА</label>
                 <select class="admin-input" name="paymentMethod" required>
                     ${typeof renderPaymentMethodOptions === 'function' ? renderPaymentMethodOptions(payment?.paymentMethod || '') : ''}
@@ -4230,7 +4261,7 @@ window.openRefundModal = async function(originalPaymentId = '') {
             <button type="submit" class="modal-submit student-refund-submit">ОФОРМИТЬ ВОЗВРАТ</button>
         `, async formData => {
             const payload = Object.fromEntries(formData.entries());
-            payload.studentId = currentViewingStudentId;
+            payload.studentId = studentId;
             if (originalPaymentId) payload.originalPaymentId = originalPaymentId;
             const refundResponse = await fetch(`${API_URL}/payments/refund`, {
                 method: 'POST',
@@ -4244,8 +4275,9 @@ window.openRefundModal = async function(originalPaymentId = '') {
             if (!refundResponse.ok || !refundResult.success) throw new Error(refundResult.error || 'Ошибка возврата');
             toast.success(refundResult.message);
             invalidateCache('dashboard', 'membership-actions', 'students');
-            await viewStudent(currentViewingStudentId);
+            await viewStudent(studentId);
         });
+        restoreMoneyOperationDraft(draft);
     } catch (error) {
         toast.error(error.message);
     }
@@ -4257,8 +4289,11 @@ window.openBalanceAdjustmentModal = async function() {
         return;
     }
 
+    const studentId = currentViewingStudentId;
     try {
-        const response = await fetch(`${API_URL}/students/${currentViewingStudentId}`, {
+        const saved = getPendingFinancialDraft(`${API_URL}/students/${studentId}/balance-adjustment`, 'POST', '{}');
+        const draft = saved ? JSON.parse(saved.body) : null;
+        const response = await fetch(`${API_URL}/students/${studentId}`, {
             headers: { Authorization: `Bearer ${getAuthToken()}` },
         });
         const result = await response.json();
@@ -4290,14 +4325,14 @@ window.openBalanceAdjustmentModal = async function() {
         `, async formData => {
             const payload = Object.fromEntries(formData.entries());
             const rawAmount = Number(payload.amount);
-            if (!Number.isFinite(rawAmount) || rawAmount <= 0) {
-                throw new Error('Укажите сумму больше 0');
+            if (!Number.isSafeInteger(rawAmount) || rawAmount <= 0) {
+                throw new Error('Укажите положительную целую сумму');
             }
             const signedAmount = payload.direction === 'decrease'
-                ? -Math.trunc(rawAmount)
-                : Math.trunc(rawAmount);
+                ? -rawAmount
+                : rawAmount;
 
-            const adjustResponse = await fetch(`${API_URL}/students/${currentViewingStudentId}/balance-adjustment`, {
+            const adjustResponse = await fetch(`${API_URL}/students/${studentId}/balance-adjustment`, {
                 method: 'POST',
                 headers: {
                     Authorization: `Bearer ${getAuthToken()}`,
@@ -4314,8 +4349,9 @@ window.openBalanceAdjustmentModal = async function() {
             }
             toast.success(adjustResult.message || 'Баланс скорректирован');
             invalidateCache('dashboard', 'students');
-            await viewStudent(currentViewingStudentId);
+            await viewStudent(studentId);
         });
+        if (draft) restoreMoneyOperationDraft({ amount: Math.abs(draft.amount), direction: draft.amount < 0 ? 'decrease' : 'increase', reason: draft.reason });
     } catch (error) {
         toast.error(error.message);
     }
@@ -4338,13 +4374,13 @@ function initAddPaymentHandler() {
 
             const studentId = document.getElementById('paymentStudentId').value;
             const type = 'membership_full';
-            const amount = parseInt(document.getElementById('paymentAmount').value);
+            const amount = Number(document.getElementById('paymentAmount').value);
             const paymentDate = document.getElementById('paymentDate').value;
             const notes = document.getElementById('paymentNotes').value;
             const paymentMethod = document.getElementById('paymentMethod')?.value || '';
 
-            if (!amount || amount <= 0) {
-                toast.warning('Укажите сумму платежа');
+            if (!Number.isSafeInteger(amount) || amount <= 0 || amount > 2147483647) {
+                toast.warning('Укажите положительную целую сумму платежа');
                 return;
             }
             if (!paymentMethod) {
@@ -4374,7 +4410,7 @@ function initAddPaymentHandler() {
                         studentId,
                         amount,
                         type,
-                        paymentDate: paymentDate || new Date().toISOString(),
+                        paymentDate: paymentDate || undefined,
                         notes,
                         paymentMethod: paymentMethod || undefined
                     })
@@ -4411,7 +4447,7 @@ function initAddPaymentHandler() {
                 }
             } catch (error) {
                 console.error('Error adding payment:', error);
-                toast.error('Не удалось добавить платеж');
+                toast.error(error.message || 'Не удалось добавить платеж');
             } finally {
                 // Разблокируем форму
                 isSubmitting = false;

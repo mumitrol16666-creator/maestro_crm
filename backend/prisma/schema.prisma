@@ -182,6 +182,7 @@ model Student {
   offerAcceptedAt             DateTime?
   accountBalance              Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
   accountBalanceInitializedAt DateTime?
+  balanceEntries              StudentBalanceEntry[]
   penaltyPoints               Int          @default(0)
   studentAvatar               String?
 
@@ -801,6 +802,9 @@ model Payment {
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
   paymentMethod               String? // kaspi, cash, kaspi_pay, freedom, halyk
+  cancelledAt                 DateTime?
+  cancellationReason          String?  @db.Text
+  isCancellation              Boolean  @default(false)
 
   // Discount snapshot on this payment (for history)
   basePrice                 Int?
@@ -1604,4 +1608,45 @@ model IdempotencyKey {
   expiresAt      DateTime
   responseStatus Int?
   responseBody   String?  @db.Text
+}
+
+// Durable outcomes for money operations. Written in the financial transaction.
+model FinancialRequest {
+  id             String   @id
+  actorId        String
+  operation      String
+  requestHash    String
+  responseStatus Int
+  responseBody   Json
+  createdAt      DateTime @default(now())
+}
+
+// Append-only account movements. Database triggers serialize entries and update
+// Student.accountBalance; updating that balance directly is prohibited.
+model StudentBalanceEntry {
+  id             String   @id @default(cuid())
+  studentId      String
+  position       Int      @default(0)
+  amount         Int
+  balanceBefore  Int      @default(0)
+  balanceAfter   Int      @default(0)
+  kind           String
+  sourceType     String
+  sourceId       String
+  actorId        String?
+  reason         String   @db.Text
+  operationKey   String   @unique
+  requestHash    String
+  recordedAt     DateTime @default(now())
+  effectiveAt    DateTime @default(now())
+  needsReview    Boolean  @default(false)
+  metadata       Json?
+  reversalOfId   String?  @unique
+
+  student        Student @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf     StudentBalanceEntry? @relation("BalanceReversal", fields: [reversalOfId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversal       StudentBalanceEntry? @relation("BalanceReversal")
+
+  @@unique([studentId, position])
+  @@index([studentId, sourceType, sourceId])
 }

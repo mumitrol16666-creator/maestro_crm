@@ -4,6 +4,7 @@ const { prisma } = require('../config/db');
 const { authenticate, requireAdmin } = require('../middleware/auth');
 const { getPaymentMethodLabel, normalizePaymentMethod } = require('../services/paymentMethods');
 const { createCashTransaction } = require('../services/cashTelegramNotifications');
+const { parsePositiveMoney } = require('../services/paymentPolicy');
 const {
     isCashBalanceExcludedCategory,
     isCashReconciliationCategory,
@@ -347,16 +348,16 @@ router.post('/transactions', authenticate, requireAdmin, async (req, res) => {
         if (!['income', 'expense'].includes(type)) {
             return res.status(400).json({ success: false, error: 'Выберите приход или расход' });
         }
-        if (!amount || amount <= 0) {
-            return res.status(400).json({ success: false, error: 'Сумма должна быть больше 0' });
-        }
+        let parsedAmount;
+        try { parsedAmount = parsePositiveMoney(amount); }
+        catch (error) { return res.status(400).json({ success: false, error: error.message }); }
         if (!category || !description) {
             return res.status(400).json({ success: false, error: 'Категория и описание обязательны' });
         }
 
         const transaction = await prisma.$transaction(tx => createCashTransaction(tx, {
             type,
-            amount: parseInt(amount, 10),
+            amount: parsedAmount,
             category: scope === 'shop' ? `shop_manual_${type}` : category,
             description,
             date: date ? new Date(date) : new Date(),

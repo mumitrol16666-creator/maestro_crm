@@ -8,8 +8,8 @@
 //     Автору платежа (admin / sales_manager) зачитывается в статистику
 //     через запись в StudentRecovery.
 //
-// Функция вызывается ПЕРЕД созданием нового платежа — чтобы детект
-// "был ли потерян" работал на прошлом состоянии.
+// Вызывается перед созданием платежа ВНУТРИ его транзакции, чтобы
+// прошлое состояние определялось верно, а ошибка откатывала восстановление.
 // =====================================================
 const { prisma } = require('../config/db');
 const { getLostThresholdDate } = require('./students');
@@ -77,9 +77,10 @@ async function autoRecoverStudent(studentId, actorUserId, opts = {}) {
                 pausedUntil: null,
                 status: 'active',
             },
-        }).catch(() => {});
+        });
         return true;
     } catch (err) {
+        if (opts.tx) throw err;
         console.error('autoRecoverStudent error:', err);
         return false;
     }

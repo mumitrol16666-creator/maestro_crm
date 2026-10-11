@@ -11,6 +11,7 @@ const { prisma } = require('../config/db');
 const { getMembershipLessonChargeAmount } = require('./lessonPricing');
 const { isRateCard, rateCardSupportsLesson, selectRateCard, billingMembershipFilter } = require('./rateCards');
 const { outstandingClassCharges } = require('./classChargeLedger');
+const { reverseLessonBalance } = require('./studentBalanceLedger');
 const { outstandingClassFreezes, freezeLedgerConflict } = require('./classFreezeLedger');
 
 /**
@@ -138,7 +139,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
     const chargeAmount = getMembershipLessonChargeAmount(membership, classRecord);
     if (chargeAmount === null) return { deducted: false, reason: 'price_unavailable', membershipId: membership.id };
 
-    await db.membershipTransaction.create({
+    const chargeTransaction = await db.membershipTransaction.create({
         data: {
             membershipId: membership.id,
             type: 'manual_deduct',
@@ -161,7 +162,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         });
     }
 
-    return { deducted: true, membershipId: membership.id, chargeAmount, classesBalanceAfter: null };
+    return { deducted: true, membershipId: membership.id, chargeAmount, transactionId: chargeTransaction.id, classesBalanceAfter: null };
 }
 
 async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx, selectedMembershipId) {
@@ -313,7 +314,8 @@ async function refundMembershipForClass(studentId, classRecord, addedById, tx, r
             });
             if (attendee) {
                 if (attendee.chargeAmount > 0) {
-                    await db.student.update({ where: { id: studentId }, data: { accountBalance: { increment: attendee.chargeAmount } } });
+                    await reverseLessonBalance(db, { attendee, classRecord, actorId: addedById,
+                        reason: reason || `Возврат за урок: ${classRecord.title}` });
                 }
                 await db.classAttendee.update({ where: { id: attendee.id }, data: {
                     chargeAmount: 0, chargedMembershipId: null, chargeSource: null, autoDeducted: false,

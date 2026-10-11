@@ -185,7 +185,6 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                         ${isFormerView ? `
                             <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">История</button>
                             <button class="table-btn" onclick="restoreFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${isPaused})">${isPaused ? 'Снять с паузы' : 'Восстановить'}</button>
-                            ${canDelete ? `<button class="table-btn danger" onclick="permanentlyDeleteFormerStudent(${jsUserArg(user._id)}, ${jsUserArg(userFio)})">Удалить навсегда</button>` : ''}
                         ` : `
                         ${user.role === 'student' ? `
                         <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">Карточка</button>
@@ -242,30 +241,8 @@ async function restoreFormerStudent(userId, userName, isPaused = false) {
     }
 }
 
-async function permanentlyDeleteFormerStudent(userId, userName) {
-    if (!isSuperAdmin()) {
-        toast.warning('Полное удаление доступно только супер-администратору');
-        return;
-    }
-    const first = await customConfirm(
-        `Полностью удалить «${userName}»?\n\nБудут удалены платежи, посещаемость, уроки и все связи. Показатели исчезнут из аналитики.`
-    );
-    if (!first) return;
-    const second = await customConfirm('Последнее подтверждение: это действие невозможно отменить. Удалить ученика как будто его никогда не было?');
-    if (!second) return;
-    try {
-        const response = await fetch(`${API_URL}/students/${userId}/permanent`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${getAuthToken()}` },
-        });
-        const data = await response.json();
-        if (!response.ok || !data.success) throw new Error(data.error || 'Не удалось удалить ученика');
-        toast.success(data.message);
-        invalidateCache('dashboard', 'analytics', 'students', 'membership-actions');
-        await renderUsers('departed', currentUserSearch, currentUserPage);
-    } catch (error) {
-        toast.error(error.message);
-    }
+function permanentlyDeleteFormerStudent() {
+    toast.warning('Ученик находится в архиве. Полное удаление отключено, чтобы сохранить деньги и историю.');
 }
 
 // Рендер пагинации для пользователей

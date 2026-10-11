@@ -1,3 +1,4 @@
+const { updateTestStudent } = require('./helpers/studentFixtures');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 
@@ -108,8 +109,8 @@ if (!process.env.TEST_DATABASE_URL) {
             request('/payments', { method: 'POST', body, token, key }),
         ]);
 
-        assert.equal(results.filter((item) => item.status === 201).length, 1);
-        assert.equal(results.filter((item) => item.status === 409).length, 1);
+        assert.equal(results.filter((item) => item.status === 201).length, 2);
+        assert.deepEqual(results[0].payload, results[1].payload);
         validatePaymentCreateResponse(results.find((item) => item.status === 201).payload);
         assert.equal(await prisma.payment.count({ where: { studentId: student.id } }), 1);
         const freshStudent = await prisma.student.findUnique({ where: { id: student.id } });
@@ -396,7 +397,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -448,7 +449,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -485,7 +486,7 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 4000 },
         });
@@ -668,7 +669,7 @@ if (!process.env.TEST_DATABASE_URL) {
                     paymentMethod: TEST_PAYMENT_METHOD,
                 },
             }),
-            prisma.student.update({
+            updateTestStudent(prisma, {
                 where: { id: student.id },
                 data: { accountBalance: 9000 },
             }),
@@ -1144,13 +1145,14 @@ if (!process.env.TEST_DATABASE_URL) {
                 paymentMethod: TEST_PAYMENT_METHOD,
             },
         });
-        await prisma.student.update({
+        await updateTestStudent(prisma, {
             where: { id: student.id },
             data: { accountBalance: 3000 },
         });
         const result = await request(`/payments/${payment.id}`, {
             method: 'DELETE',
             key: 'delete-refunded-payment',
+            body: { reason: 'Ошибочный платёж' },
         });
         assert.equal(result.status, 409);
         assert.ok(await prisma.payment.findUnique({ where: { id: payment.id } }));

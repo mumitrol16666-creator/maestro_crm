@@ -189,7 +189,7 @@
                 <section class="student-print-section">
                     <div class="student-print-section__head">
                         <h2>История занятий</h2>
-                        <span>Списано за период: ${html(money(summary.chargedTotal || 0))}</span>
+                        <span>Списано за период: ${summary.chargedTotal === undefined ? '—' : html(money(summary.chargedTotal))}</span>
                     </div>
                     <table class="student-print-table student-print-table--attendance">
                         <thead><tr><th>Дата и время</th><th>Занятие</th><th>Преподаватель</th><th>Статус</th><th>Списание</th></tr></thead>
@@ -339,7 +339,7 @@
                             <div><dt>Направления</dt><dd>${html((student.learningDirections || []).join(', ') || 'Не указаны')}</dd></div>
                             <div><dt>Уровень</dt><dd>${html(student.learningLevel || 'Не указан')}</dd></div>
                             <div><dt>Основной педагог</dt><dd>${html(personName(student.assignedTeacher))}</dd></div>
-                            <div><dt>Текущий баланс</dt><dd>${html(money(student.accountBalance || 0))}</dd></div>
+                            <div><dt>Текущий баланс</dt><dd>${student.accountBalance === undefined ? '—' : html(money(student.accountBalance))}</dd></div>
                         </dl>
                     </div>
                     <div class="student-print-profile-block is-wide">
@@ -485,6 +485,7 @@
     }
 
     function selectType(type) {
+        if (type === 'finance' && !['admin', 'super_admin'].includes(getUserRole())) return;
         state.type = ['attendance', 'profile', 'finance'].includes(type) ? type : 'attendance';
         document.querySelectorAll('[data-student-print-type]').forEach(button => {
             const active = button.dataset.studentPrintType === state.type;
@@ -503,6 +504,7 @@
         }
         const modal = byId('studentPrintModal');
         if (!modal) return;
+        modal.querySelector('[data-student-print-type="finance"]')?.toggleAttribute('hidden', !['admin', 'super_admin'].includes(getUserRole()));
         if (!byId('studentPrintFrom').value) byId('studentPrintFrom').value = firstDayOfMonthInputValue();
         if (!byId('studentPrintTo').value) byId('studentPrintTo').value = todayInputValue();
         state.type = 'attendance';

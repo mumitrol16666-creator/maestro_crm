@@ -12,6 +12,15 @@ const {
 const { normalizePaymentMethod } = require('../services/paymentMethods');
 const { syncFirstPaymentBonusForStudent } = require('../services/payroll');
 const { createCashTransaction } = require('../services/cashTelegramNotifications');
+const { financialRequestKey, runFinancialRequest, financialError } = require('../services/financialRequest');
+const { recordBalanceMovement } = require('../services/studentBalanceLedger');
+
+function sendFinancialError(res, error, fallback) {
+    return res.status(error.statusCode || 500).json({
+        success: false, code: error.code,
+        error: error.statusCode ? error.message : fallback,
+    });
+}
 
 function formatPaymentPersonName(person, fallback = '') {
     return [person?.lastName, person?.name, person?.middleName]
@@ -107,6 +116,20 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             notes, teacherId, relatedPaymentId, paymentMethod
         } = req.body;
         const normalizedType = type || 'membership_full';
+        const requestKey = financialRequestKey(req);
+        if (relatedPaymentId !== undefined && relatedPaymentId !== null) {
+            throw financialError('Пополнение баланса не изменяет другой платёж. Для возврата используйте действие «Возврат».', 'RELATED_PAYMENT_NOT_ALLOWED');
+        }
+        if (typeof studentId !== 'string' || !studentId.trim()
+            || (teacherId != null && typeof teacherId !== 'string')
+            || (notes != null && typeof notes !== 'string')
+            || !['trial_advance', 'trial_full', 'membership_advance', 'membership_balance', 'membership_full', 'single_class', 'individual_class'].includes(normalizedType)) {
+            throw financialError('Некорректные данные платежа', 'INVALID_PAYMENT_INPUT');
+        }
+        const paymentDate = req.body.paymentDate ? new Date(req.body.paymentDate) : new Date();
+        if ((req.body.paymentDate != null && typeof req.body.paymentDate !== 'string') || !Number.isFinite(paymentDate.getTime())) {
+            throw financialError('Некорректная дата платежа', 'INVALID_PAYMENT_DATE');
+        }
 
         if (!studentId || !amount) {
             return res.status(400).json({
@@ -131,24 +154,24 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: error.message });
         }
 
-        // Phase 2: авто-возврат, если ученик помечен как потерянный
-        if (studentId && req.user?.id) {
-            await autoRecoverStudent(studentId, req.user.id, {
-                source: 'payment',
-                note: `Платёж ${parsedAmount}₸ (${normalizedType})`,
-            });
-        }
-
-        const payment = await prisma.$transaction(async tx => {
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey, actorId: req.user.id, operation: 'payment:create', payload: req.body,
+        }, async tx => {
             const lockedStudents = await tx.$queryRaw`
-                SELECT id, name, "lastName", "middleName", "accountBalance" FROM "Student" WHERE id = ${studentId} FOR UPDATE
+                SELECT id, name, "lastName", "middleName", "accountBalance" FROM "Student" WHERE id = ${studentId} AND role = 'student' FOR UPDATE
             `;
             const student = lockedStudents[0];
             if (!student) {
                 const error = new Error('Ученик не найден');
                 error.code = 'STUDENT_NOT_FOUND';
+                error.statusCode = 404;
                 throw error;
             }
+
+            await autoRecoverStudent(studentId, req.user.id, {
+                tx, source: 'payment', atDate: paymentDate,
+                note: `Платёж ${parsedAmount}₸ (${normalizedType})`,
+            });
 
             const created = await tx.payment.create({
                 data: {
@@ -158,18 +181,18 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                     membershipId: null,
                     managerId: req.user.id,
                     teacherId: teacherId || null,
-                    relatedPaymentId: relatedPaymentId || null,
                     notes: notes || '',
                     status: 'completed',
-                    paymentDate: req.body.paymentDate ? new Date(req.body.paymentDate) : new Date(),
+                    paymentDate,
                     paymentMethod: normalizedPaymentMethod
                 }
             });
 
             // Денежный баланс независим от абонемента: любое зачисление пополняет его.
-            await tx.student.update({
-                where: { id: studentId },
-                data: { accountBalance: { increment: parsedAmount } }
+            await recordBalanceMovement(tx, {
+                studentId, amount: parsedAmount, kind: 'payment', sourceType: 'payment', sourceId: created.id,
+                actorId: req.user.id, reason: notes?.trim() || 'Полученная оплата обучения',
+                operationKey: `payment:${created.id}`, effectiveAt: created.paymentDate,
             });
 
             // Создаем запись в кассе
@@ -203,25 +226,13 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 },
             });
 
-            if (relatedPaymentId) {
-                await tx.payment.update({
-                    where: { id: relatedPaymentId },
-                    data: { status: 'completed' }
-                });
-            }
-
             await syncFirstPaymentBonusForStudent(tx, studentId);
-
-            return created;
+            return { status: 201, body: { success: true, payment: { ...created, _id: created.id } } };
         });
-
-        res.status(201).json({
-            success: true,
-            payment: { ...payment, _id: payment.id }
-        });
+        res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('Create payment error:', error);
-        res.status(500).json({ success: false, error: 'Ошибка создания платежа' });
+        sendFinancialError(res, error, 'Ошибка создания платежа');
     }
 });
 
@@ -297,6 +308,7 @@ router.patch('/:id/due-date', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
     try {
+        const requestKey = financialRequestKey(req);
         const { amount, paymentDate, paymentMethod, notes } = req.body;
         let parsedAmount;
         try {
@@ -316,7 +328,9 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: error.message });
         }
 
-        const updated = await prisma.$transaction(async tx => {
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey, actorId: req.user.id, operation: `payment:edit:${req.params.id}`, payload: req.body,
+        }, async tx => {
             // Сериализуем параллельные исправления одного платежа.
             // Второй запрос увидит уже обновлённую сумму и применит только реальную разницу.
             const lockedPayments = await tx.$queryRaw`
@@ -340,9 +354,12 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             const difference = calculatePaymentAdjustment(payment.amount, parsedAmount);
             const effectivePaymentDate = parsedDate || payment.paymentDate;
             if (difference !== 0 && student) {
-                await tx.student.update({
-                    where: { id: payment.studentId },
-                    data: { accountBalance: { increment: difference } },
+                const movement = await recordBalanceMovement(tx, {
+                    studentId: payment.studentId, amount: difference, kind: 'payment_correction',
+                    sourceType: 'payment', sourceId: payment.id, actorId: req.user.id,
+                    reason: notes?.trim() || `Исправление суммы оплаты: ${payment.amount} → ${parsedAmount} ₸`,
+                    operationKey: `payment-edit:${payment.id}:${req.user.id}:${requestKey}`,
+                    metadata: { oldAmount: payment.amount, newAmount: parsedAmount },
                 });
 
                 await tx.activityLog.create({
@@ -357,8 +374,8 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                             oldAmount: payment.amount,
                             newAmount: parsedAmount,
                             balanceAdjustment: difference,
-                            balanceBefore: student.accountBalance,
-                            balanceAfter: (student.accountBalance || 0) + difference,
+                            balanceBefore: movement.balanceBefore,
+                            balanceAfter: movement.balanceAfter,
                             note: notes?.trim() || null,
                         },
                     },
@@ -386,15 +403,13 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
                 },
             });
             await syncFirstPaymentBonusForStudent(tx, payment.studentId);
-            return { result, difference };
+            return { status: 200, body: {
+                success: true, payment: { ...result, _id: result.id },
+                balanceAdjustment: difference, message: 'Платёж изменён, баланс пересчитан',
+            } };
         });
 
-        res.json({
-            success: true,
-            payment: { ...updated.result, _id: updated.result.id },
-            balanceAdjustment: updated.difference,
-            message: 'Платёж изменён, баланс пересчитан',
-        });
+        res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('Update payment error:', error);
         if (error.code === 'PAYMENT_NOT_FOUND') {
@@ -403,7 +418,7 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
         if (['PAYMENT_NOT_EDITABLE', 'PAYMENT_BELOW_REFUNDS'].includes(error.code)) {
             return res.status(400).json({ success: false, error: error.message });
         }
-        res.status(500).json({ success: false, error: 'Не удалось изменить платёж' });
+        sendFinancialError(res, error, 'Не удалось изменить платёж');
     }
 });
 
@@ -413,7 +428,12 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
 // =====================================================
 router.post('/refund', authenticate, requireAdmin, async (req, res) => {
     try {
+        const requestKey = financialRequestKey(req);
         const { studentId, amount, reason, paymentMethod, originalPaymentId } = req.body;
+        if (typeof studentId !== 'string' || typeof reason !== 'string'
+            || (originalPaymentId != null && typeof originalPaymentId !== 'string')) {
+            throw financialError('Некорректные данные возврата', 'INVALID_REFUND_INPUT');
+        }
         let parsedAmount;
         try {
             parsedAmount = parsePositiveMoney(amount, 'Сумма возврата');
@@ -427,7 +447,9 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
             return res.status(400).json({ success: false, error: 'Укажите причину возврата' });
         }
 
-        const refund = await prisma.$transaction(async tx => {
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey, actorId: req.user.id, operation: 'payment:refund', payload: req.body,
+        }, async tx => {
             // Всегда блокируем исходный платёж до ученика. Такой же порядок использует
             // редактирование платежа — это исключает гонку и взаимную блокировку.
             let originalPayment = null;
@@ -439,7 +461,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
             }
             const lockedStudents = await tx.$queryRaw`
                 SELECT id, name, "lastName", "middleName", "accountBalance"
-                FROM "Student" WHERE id = ${studentId} FOR UPDATE
+                FROM "Student" WHERE id = ${studentId} AND role = 'student' FOR UPDATE
             `;
             const student = lockedStudents[0];
             if (!student) {
@@ -451,7 +473,7 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 originalPaymentId
                 && (!originalPayment
                     || originalPayment.studentId !== studentId
-                    || originalPayment.status !== 'completed')
+                    || originalPayment.status !== 'completed' || originalPayment.cancelledAt)
             ) {
                 const error = new Error('Исходный платёж недоступен для возврата');
                 error.code = 'ORIGINAL_PAYMENT_NOT_REFUNDABLE';
@@ -483,10 +505,6 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 throw error;
             }
 
-            await tx.student.update({
-                where: { id: studentId },
-                data: { accountBalance: { decrement: parsedAmount } },
-            });
             const created = await tx.payment.create({
                 data: {
                     studentId,
@@ -500,6 +518,11 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                     paymentDate: new Date(),
                 },
             });
+            await recordBalanceMovement(tx, {
+                studentId, amount: -parsedAmount, kind: 'payment_refund', sourceType: 'payment', sourceId: created.id,
+                actorId: req.user.id, reason: reason.trim(), operationKey: `payment:${created.id}`,
+                effectiveAt: created.paymentDate, metadata: { originalPaymentId: originalPaymentId || null },
+            });
             await createCashTransaction(tx, {
                 type: 'expense',
                 amount: parsedAmount,
@@ -511,14 +534,12 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
                 paymentMethod: normalizedPaymentMethod,
                 notes: String(reason).trim(),
             });
-            return created;
+            return { status: 201, body: {
+                success: true, refund: { ...created, _id: created.id },
+                message: `Возврат ${parsedAmount} ₸ оформлен`,
+            } };
         });
-
-        res.status(201).json({
-            success: true,
-            refund: { ...refund, _id: refund.id },
-            message: `Возврат ${parsedAmount} ₸ оформлен`,
-        });
+        res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('Refund payment error:', error);
         if (['REFUND_BALANCE_CHANGED', 'REFUND_LIMIT_CHANGED'].includes(error.code)) {
@@ -535,17 +556,22 @@ router.post('/refund', authenticate, requireAdmin, async (req, res) => {
         ].includes(error.code)) {
             return res.status(400).json({ success: false, error: error.message });
         }
-        res.status(500).json({ success: false, error: 'Не удалось оформить возврат' });
+        sendFinancialError(res, error, 'Не удалось оформить возврат');
     }
 });
 
 // =====================================================
 // DELETE /api/payments/:id
-// Удалить платёж
+// Отменить ошибочный платёж, сохранив исходную запись и связанное сторно.
 // =====================================================
 router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
     try {
-        await prisma.$transaction(async (tx) => {
+        const requestKey = financialRequestKey(req);
+        const reason = typeof req.body?.reason === 'string' ? req.body.reason.trim() : '';
+        if (!reason) throw financialError('Укажите причину отмены платежа', 'CANCELLATION_REASON_REQUIRED');
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey, actorId: req.user.id, operation: `payment:cancel:${req.params.id}`, payload: req.body,
+        }, async (tx) => {
             const lockedPayments = await tx.$queryRaw`
                 SELECT * FROM "Payment" WHERE id = ${req.params.id} FOR UPDATE
             `;
@@ -554,6 +580,9 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
                 const error = new Error('Платёж не найден');
                 error.code = 'PAYMENT_NOT_FOUND';
                 throw error;
+            }
+            if (payment.cancelledAt) {
+                return { status: 200, body: { success: true, message: 'Платёж уже отменён, история сохранена.' } };
             }
             if (payment.status !== 'completed') {
                 const error = new Error('Возвратную или отменённую операцию удалять нельзя');
@@ -576,33 +605,37 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
             await tx.$queryRaw`
                 SELECT id FROM "Student" WHERE id = ${payment.studentId} FOR UPDATE
             `;
-            await tx.student.update({
-                where: { id: payment.studentId },
-                data: { accountBalance: { decrement: payment.amount } }
+            const reversal = await tx.payment.create({ data: {
+                studentId: payment.studentId, managerId: req.user.id,
+                amount: payment.amount, type: payment.type, status: 'refunded',
+                relatedPaymentId: payment.id, paymentMethod: payment.paymentMethod,
+                isCancellation: true, notes: reason,
+            } });
+            await recordBalanceMovement(tx, {
+                studentId: payment.studentId, amount: -payment.amount, kind: 'payment_cancellation',
+                sourceType: 'payment', sourceId: reversal.id, actorId: req.user.id, reason,
+                operationKey: `payment:${reversal.id}`, effectiveAt: reversal.paymentDate,
+                metadata: { originalPaymentId: payment.id },
             });
 
-            // Отвязываем старые транзакции от этого платежа перед удалением
-            await tx.cashTransaction.updateMany({
-                where: { relatedPaymentId: payment.id },
-                data: { relatedPaymentId: null }
-            });
-
-            // Создаем расходную операцию в кассе, фиксирующую удаление
             await createCashTransaction(tx, {
                 type: 'expense',
                 amount: payment.amount,
                 category: 'deletion',
-                description: `Удаление платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
+                description: `Отмена платежа #${payment.id} на сумму ${payment.amount} ₸ (${formatPaymentPersonName(student)})`.trim(),
                 date: new Date(),
                 createdById: req.user.id,
                 paymentMethod: payment.paymentMethod || null,
+                relatedPaymentId: reversal.id,
+                notes: reason,
             });
-
-            await tx.payment.delete({ where: { id: payment.id } });
+            await tx.payment.update({ where: { id: payment.id }, data: {
+                cancelledAt: new Date(), cancellationReason: reason,
+            } });
             await syncFirstPaymentBonusForStudent(tx, payment.studentId);
+            return { status: 200, body: { success: true, message: 'Платёж отменён, история сохранена.', reversalId: reversal.id } };
         });
-
-        res.json({ success: true, message: 'Платеж удален' });
+        res.status(outcome.status).json(outcome.body);
     } catch (error) {
         console.error('Delete payment error:', error);
         if (error.code === 'PAYMENT_NOT_FOUND') {
@@ -611,7 +644,7 @@ router.delete('/:id', authenticate, requireSuperAdmin, async (req, res) => {
         if (['PAYMENT_DELETE_FORBIDDEN', 'PAYMENT_HAS_REFUNDS'].includes(error.code)) {
             return res.status(409).json({ success: false, error: error.message });
         }
-        res.status(500).json({ success: false, error: 'Ошибка удаления' });
+        sendFinancialError(res, error, 'Не удалось отменить платёж');
     }
 });
 

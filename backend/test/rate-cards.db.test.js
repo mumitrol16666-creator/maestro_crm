@@ -1,3 +1,4 @@
+const { updateTestStudent } = require('./helpers/studentFixtures');
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { randomUUID } = require('node:crypto');
@@ -203,12 +204,17 @@ if (!process.env.TEST_DATABASE_URL) {
             status: 'archived', totalPrice: 22000, totalClasses: 8, classesRemaining: 7, classesUsed: 1,
             startDate: new Date('2026-01-01'), endDate: new Date('2026-12-01') } });
         await prisma.class.update({ where: { id: c.id }, data: { status: 'completed' } });
-        await prisma.student.update({ where: { id: s.id }, data: { accountBalance: 47250 } });
+        await updateTestStudent(prisma, { where: { id: s.id }, data: { accountBalance: 47250 } });
         await prisma.classAttendee.updateMany({ where: { classId: c.id }, data: { chargeAmount: 2750, chargedMembershipId: old.id, chargeSource: 'membership', autoDeducted: true } });
         await prisma.membershipTransaction.create({ data: { membershipId: old.id, classId: c.id, type: 'manual_deduct', amount: 0, reason: 'Legacy' } });
         assert.equal(await hasDeductionForClass(old.id, c.id), true);
         assert.equal((await request(`/classes/${c.id}/reopen`, { reason: 'QA legacy' })).status, 200);
         assert.equal(await balance(s), 50000); assert.equal(await hasDeductionForClass(old.id, c.id), false);
+        const legacyEntry = await prisma.studentBalanceEntry.findFirst({ where: { studentId: s.id, sourceId: c.id, kind: 'lesson_reversal' } });
+        assert.equal(legacyEntry.amount, 2750);
+        assert.equal(legacyEntry.needsReview, true);
+        assert.equal(legacyEntry.metadata.legacyCharge, true);
+        assert.equal(legacyEntry.reversalOfId, null);
         assert.equal((await prisma.membership.findUnique({ where: { id: old.id } })).classesRemaining, 7);
         assert.equal((await prisma.membershipTransaction.findFirst({ where: { membershipId: old.id, classId: c.id, type: 'add' } })).amount, 0);
         assert.equal((await request(`/classes/${c.id}/reopen`, { reason: 'QA repeat' })).status, 400);
@@ -223,7 +229,7 @@ if (!process.env.TEST_DATABASE_URL) {
         const s = await makeUser(); const c = await lesson(s, 'individual');
         const m = await prisma.membership.create({ data: { studentId: s.id, type: 'individual_8', lessonFormat: 'individual',
             totalPrice: 22000, totalClasses: 8, classesRemaining: 8, startDate: new Date('2026-01-01'), endDate: new Date('2026-12-01') } });
-        await prisma.student.update({ where: { id: s.id }, data: { accountBalance: 47250 } });
+        await updateTestStudent(prisma, { where: { id: s.id }, data: { accountBalance: 47250 } });
         await prisma.classAttendee.updateMany({ where: { classId: c.id }, data: { chargeAmount: 2750, chargedMembershipId: m.id, chargeSource: 'membership' } });
         await prisma.membershipTransaction.createMany({ data: [0, 0].map(amount => ({ membershipId: m.id, classId: c.id, type: 'manual_deduct', amount, reason: 'Legacy' })) });
         await Promise.all([refundMembershipForClass(s.id, c, admin.id), refundMembershipForClass(s.id, c, admin.id)]);

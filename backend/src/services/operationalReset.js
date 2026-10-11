@@ -174,6 +174,11 @@ async function createDatabaseBackup() {
 }
 
 async function resetOperationalData() {
+    if (await prisma.studentBalanceEntry.count()) {
+        const error = new Error('Очистка отключена: денежный журнал и история учеников должны сохраняться.');
+        error.code = 'BALANCE_HISTORY_PROTECTED';
+        throw error;
+    }
     if (resetInProgress) {
         const error = new Error('Очистка уже выполняется');
         error.code = 'RESET_IN_PROGRESS';

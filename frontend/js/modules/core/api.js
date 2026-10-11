@@ -29,6 +29,24 @@ function mutationChangesCashbox(url) {
     return /\/(payments|cashbox|salary|shop|classes|bookings)(\/|\?|$)/.test(url);
 }
 
+function financialDraftStorageKey(url, method, body) {
+    if (!/\/(?:payments(?:\/refund|\/[^/?]+)?|students\/[^/?]+\/balance-adjustment)(?:\?.*)?$/.test(url)) return null;
+    if (!['POST', 'PATCH', 'DELETE'].includes(method)) return null;
+    let actor = 'unknown';
+    try {
+        const token = getAuthToken();
+        const claims = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        actor = claims.userId || claims.id || actor;
+    } catch { /* The server still authenticates every request. */ }
+    const target = JSON.parse(body || '{}').studentId || '';
+    return `maestro:financial-draft:${actor}:${method}:${url.split('?')[0]}:${target}`;
+}
+
+function getPendingFinancialDraft(url, method, body) {
+    const storageKey = financialDraftStorageKey(url, method, body);
+    return storageKey ? JSON.parse(sessionStorage.getItem(storageKey) || 'null') : null;
+}
+
 window.fetch = function protectedFetch(input, options = {}) {
     const method = String(options.method || (typeof input !== 'string' && input?.method) || 'GET').toUpperCase();
     const isMutation = ['POST', 'PUT', 'PATCH', 'DELETE'].includes(method);
@@ -47,12 +65,39 @@ window.fetch = function protectedFetch(input, options = {}) {
     }
 
     const headers = new Headers(options.headers || (typeof input !== 'string' ? input.headers : undefined) || {});
+    let financialStorageKey;
+    try {
+        financialStorageKey = financialDraftStorageKey(url, method, options.body);
+        if (financialStorageKey) {
+            const saved = JSON.parse(sessionStorage.getItem(financialStorageKey) || 'null');
+            if (saved && saved.body !== options.body) {
+                throw new Error('Результат предыдущей денежной операции ещё не подтверждён. Повторите её с прежними данными перед новой оплатой.');
+            }
+            const draft = saved || { key: headers.get('X-Idempotency-Key') || createIdempotencyKey(), body: options.body };
+            sessionStorage.setItem(financialStorageKey, JSON.stringify(draft));
+            headers.set('X-Idempotency-Key', draft.key);
+        }
+    } catch (error) {
+        return Promise.reject(error);
+    }
     if (!headers.has('X-Idempotency-Key')) {
         headers.set('X-Idempotency-Key', createIdempotencyKey());
     }
 
     const requestOptions = { ...options, method, headers };
-    const pending = nativeFetch(input, requestOptions);
+    const pending = nativeFetch(input, requestOptions).then(async response => {
+        if (financialStorageKey) {
+            // Reading the body must succeed before forgetting the key. A lost
+            // response (including truncated JSON) leaves the draft retryable.
+            const result = await response.clone().json();
+            // Expired/revoked access says nothing about an earlier uncertain
+            // commit. Keep that key for a retry after the user signs in again.
+            if ((response.ok && result.success) || [400, 404, 422].includes(response.status)) {
+                sessionStorage.removeItem(financialStorageKey);
+            }
+        }
+        return response;
+    });
     mutationRequestsInFlight.set(signature, pending);
 
     const cleanup = () => {

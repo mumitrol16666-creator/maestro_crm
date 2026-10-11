@@ -29,7 +29,7 @@ async function isStudentActive(studentId, atDate = new Date(), tx = prisma) {
     if (!studentId) return false;
     const threshold = getLostThresholdDate(atDate);
     const lastPayment = await tx.payment.findFirst({
-        where: { studentId },
+        where: { studentId, cancelledAt: null, isCancellation: false },
         orderBy: { paymentDate: 'desc' },
         select: { paymentDate: true },
     });
@@ -60,7 +60,7 @@ async function countActiveFamilyMembers(familyId, tx = prisma) {
         AND (
             COALESCE(
                 (SELECT MAX(p."paymentDate") FROM "Payment" p
-                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL),
+                 WHERE p."studentId" = s.id AND p."paymentDate" IS NOT NULL AND p."cancelledAt" IS NULL AND p."isCancellation" = false),
                 s."createdAt"
             ) >= ${threshold}
         )

@@ -4,7 +4,7 @@ FROM node:20-alpine
 WORKDIR /app
 
 # Install system dependencies (needed for some packages)
-RUN apk add --no-cache python3 make g++
+RUN apk add --no-cache python3 make g++ openssl
 
 # Copy package files
 COPY package*.json ./
@@ -13,10 +13,16 @@ COPY package*.json ./
 RUN npm ci
 
 # Copy source code
-COPY . .
+COPY src ./src
+COPY prisma/schema.prisma ./prisma/schema.prisma
+COPY prisma/migrations ./prisma/migrations
+COPY prisma.config.ts ./prisma.config.ts
 
 # Generate Prisma client
-RUN npx prisma generate
+RUN DATABASE_URL=postgresql://build:build@127.0.0.1:5432/build npx prisma generate \
+    && npm prune --omit=dev
+
+ENV NODE_ENV=production
 
 # Expose port
 EXPOSE 5000

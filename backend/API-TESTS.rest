@@ -358,6 +358,6 @@ Authorization: Bearer {{token}}
 #    - teacher: преподаватель (только свои группы)
 #    - admin: администратор (почти все)
 #    - super_admin: супер-администратор (абсолютно все)
-# 5. Используйте make-admin.js для назначения первого super_admin
+# 5. Для первого super_admin: create-super-admin.js <телефон> --password-stdin (подробности в README).
 
 

@@ -5,6 +5,7 @@ const {
     EXPECTED_QA_DATABASE,
     EXPECTED_QA_MARKER,
     inspectQaEnvironment,
+    inspectLocalDatabaseTarget,
     assertQaEnvironment,
 } = require('../src/services/qaEnvironment');
 const { secretsMatch } = require('../src/middleware/qaControllerAuth');
@@ -45,6 +46,31 @@ test('QA controller rejects remote and production-like targets', () => {
     assert.equal(remote.ok, false);
     assert.match(remote.errors.join(' '), /not local|production-like/);
     assert.throws(() => assertQaEnvironment({ ...validEnvironment, NODE_ENV: 'production' }), /blocked/);
+});
+
+test('QA guard rejects driver query overrides and alternate schema representations', () => {
+    for (const query of ['host=remote.invalid', 'host=%2Ftmp%2Fpg-socket', '%68ost=remote.invalid',
+        'sslkey=/tmp/secret', 'database=production', 'schema=private', 'schema=public&schema=private', 'options=-csearch_path=other']) {
+        assert.equal(inspectQaEnvironment({ ...validEnvironment,
+            DATABASE_URL: `postgresql://qa:qa@localhost/${EXPECTED_QA_DATABASE}?${query}` }).ok, false, query);
+    }
+});
+
+test('QA and administrative test guards reject representations reinterpreted by pg', () => {
+    for (const value of [' postgresql://qa:qa@localhost/maestro_crm_regression',
+        'postgresql://qa:qa@localhost/maestro_crm_regression ',
+        'postgresql://qa:p ass@localhost/maestro%5fcrm%5fregression',
+        'postgresql://qa:p%xx@localhost/maestro_crm_regression',
+        'postgresql://qa:qa@local\thost/maestro_crm_regression',
+        'postgresql://qa:qa@localhost/maestro_p0_test?host=remote.invalid',
+        'postgresql://qa:qa@localhost/maestro_p0_test?%68ost=%2Ftmp%2Fother-pg']) {
+        assert.equal(inspectLocalDatabaseTarget(value).ok, false, value);
+        assert.equal(inspectQaEnvironment({ ...validEnvironment, DATABASE_URL: value }).ok, false, value);
+    }
+    for (const value of ['postgresql://qa:p%20ass@localhost/maestro_crm_regression?schema=public',
+        'postgresql://qa:p%25ss@127.0.0.1:5432/maestro_crm_regression']) {
+        assert.equal(inspectQaEnvironment({ ...validEnvironment, DATABASE_URL: value }).ok, true, value);
+    }
 });
 
 test('QA controller secret uses exact constant-time-compatible matching', () => {

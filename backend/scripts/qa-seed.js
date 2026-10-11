@@ -1,7 +1,8 @@
 require('dotenv').config();
 const bcrypt = require('bcryptjs');
-const { prisma } = require('../src/config/db');
 const { assertQaEnvironment } = require('../src/services/qaEnvironment');
+assertQaEnvironment();
+const { prisma } = require('../src/config/db');
 
 const QA_PASSWORD = 'QaMaestro2026!';
 const APP_IDS = {
@@ -87,10 +88,13 @@ async function upsertPerson({ id, appUserId, name, lastName, phone, role, status
 async function main() {
     assertQaEnvironment();
 
-    const [admin, teacher1, teacher2, student1, student2, student3, student4] = await Promise.all([
+    const [admin, teacher1, teacher2] = await Promise.all([
         upsertPerson({ id: QA.admin, appUserId: APP_IDS.admin, name: 'Анна', lastName: 'Администратор', phone: '+77000000001', role: 'admin' }),
         upsertPerson({ id: QA.teacher1, appUserId: APP_IDS.teacher1, name: 'Владислав', lastName: 'Сидоров', phone: '+77000000011', role: 'teacher', directions: ['Гитара'] }),
         upsertPerson({ id: QA.teacher2, appUserId: APP_IDS.teacher2, name: 'Джулия', lastName: 'Иващенко', phone: '+77000000012', role: 'teacher', directions: ['Гитара', 'Вокал'] }),
+    ]);
+    // A fresh QA database must contain the assigned teacher before the student.
+    const [student1, student2, student3, student4] = await Promise.all([
         upsertPerson({ id: QA.student1, appUserId: APP_IDS.student1, name: 'Камбар', lastName: 'Казыбаев', phone: '+77000000021', role: 'student', directions: ['Гитара'], assignedTeacherId: QA.teacher1 }),
         upsertPerson({ id: QA.student2, appUserId: APP_IDS.student2, name: 'Алина', lastName: 'Серикова', phone: '+77000000022', role: 'student', directions: ['Гитара'] }),
         upsertPerson({ id: QA.student3, appUserId: APP_IDS.student3, name: 'Максим', lastName: 'Ахметов', phone: '+77000000023', role: 'student', directions: ['Гитара'] }),

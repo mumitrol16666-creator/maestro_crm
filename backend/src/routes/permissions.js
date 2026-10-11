@@ -7,35 +7,7 @@ let permissionsCache = null;
 let permissionsCacheTime = null;
 const CACHE_DURATION = 5 * 60 * 1000;
 
-function getDefaultPermissions(role) {
-    const defaults = {
-        super_admin: {
-            permissions: { canCreateUsers: true, canDeleteUsers: true, canEditRoles: true, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: true },
-            visibility: { dashboard: true, bookings: true, students: true, membership_actions: true, shop: true, groups: true, schedule: true, directions: true, users: true, roles: true, activity_logs: true, student_history: true, integration_logs: true, whatsapp_inbox: true }
-        },
-        admin: {
-            permissions: { canCreateUsers: true, canDeleteUsers: false, canEditRoles: false, canViewLogs: true, canManageBookings: true, canManageStudents: true, canManageGroups: true, canManageSchedule: true, canManagePayments: true, canManageDirections: false },
-            visibility: { dashboard: true, bookings: true, students: true, membership_actions: true, shop: true, groups: true, schedule: true, users: true, activity_logs: true, student_history: true, integration_logs: true, whatsapp_inbox: true }
-        },
-        sales_manager: {
-            permissions: { canManageBookings: true, canManageStudents: true, canManagePayments: true },
-            visibility: { bookings: true, students: true, membership_actions: true, shop: true, groups: true, schedule: true }
-        },
-        teacher: {
-            permissions: { canManageStudents: true, canManageSchedule: true },
-            visibility: { students: true, schedule: true }
-        },
-        staff: {
-            permissions: {},
-            visibility: {}
-        },
-        student: {
-            permissions: {},
-            visibility: {}
-        }
-    };
-    return defaults[role] || defaults.student;
-}
+const { getDefaultPermissions, validatePermissionPatch } = require('../services/rolePermissions');
 
 // GET /api/permissions
 router.get('/', authenticate, async (req, res) => {
@@ -75,6 +47,9 @@ router.get('/', authenticate, async (req, res) => {
 router.patch('/:role', authenticate, requireSuperAdmin, async (req, res) => {
     try {
         const { role } = req.params;
+        if (!validatePermissionPatch(req.body)) {
+            return res.status(400).json({ success: false, error: 'Права и видимость должны содержать только известные поля со значениями true или false' });
+        }
         const { permissions, visibility } = req.body;
 
         const validRoles = ['student', 'sales_manager', 'staff', 'teacher', 'admin', 'super_admin'];

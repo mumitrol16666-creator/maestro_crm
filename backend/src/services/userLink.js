@@ -361,10 +361,10 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         firstName,
         lastName,
     });
-    if (selection.kind === 'ambiguous') {
+    if (['match', 'ambiguous'].includes(selection.kind)) {
         return {
             success: false,
-            error: 'Several matching CRM students use this phone; manual selection is required',
+            error: 'Связать существующую карточку ученика с аккаунтом может только администратор CRM',
             status: 'manual_review',
         };
     }
@@ -376,40 +376,25 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
         };
     }
 
-    let crmStudent = selection.kind === 'match' ? selection.student : null;
-    let created = false;
-
-    if (!crmStudent) {
-        const hashedPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
-        crmStudent = await prisma.student.create({
-                data: {
-                    name: firstName.trim(),
-                    lastName: lastName.trim(),
-                    middleName: middleName ? middleName.trim() : null,
-                    dateOfBirth: parsedDateOfBirth || null,
-                    phone: digits,
-                phoneDigits: digits,
-                email: email || null,
-                password: hashedPassword,
-                role: 'student',
-                notes: 'Автоматически создан из Learning Platform',
-                appUserId,
-                externalLinkStatus: 'linked',
-                linkedAt: new Date(),
-            },
-        });
-        created = true;
-    } else {
-        crmStudent = await prisma.student.update({
-            where: { id: crmStudent.id },
-            data: {
-                appUserId,
-                externalLinkStatus: 'linked',
-                linkedAt: new Date(),
-                email: crmStudent.email || email || null,
-            },
-        });
-    }
+    const hashedPassword = await bcrypt.hash(crypto.randomBytes(24).toString('hex'), 10);
+    const crmStudent = await prisma.student.create({
+        data: {
+            name: firstName.trim(),
+            lastName: lastName.trim(),
+            middleName: middleName ? middleName.trim() : null,
+            dateOfBirth: parsedDateOfBirth || null,
+            phone: digits,
+            phoneDigits: digits,
+            email: email || null,
+            password: hashedPassword,
+            role: 'student',
+            notes: 'Автоматически создан из Learning Platform',
+            appUserId,
+            externalLinkStatus: 'linked',
+            linkedAt: new Date(),
+        },
+    });
+    const created = true;
 
     try {
         await pushLinkToLearningPlatform({
@@ -423,7 +408,8 @@ async function syncFromApp({ appUserId, phone, firstName, lastName, middleName, 
     } catch (err) {
         console.error('[integration] LP link after sync failed:', err.response?.data?.error || err.message);
     }
-    await linkOpenBookingsForStudent(prisma, crmStudent);
+    // Public registration proves neither ownership of an existing card nor of a booking.
+    // Existing bookings are linked by the CRM enrollment workflow.
 
     return {
         success: true,

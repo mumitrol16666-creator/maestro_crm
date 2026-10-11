@@ -437,6 +437,12 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
             return { success: false, error: 'Для пробного без карточки ученика используйте участника заявки', status: 400 };
         }
         const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
+        if (normalizedStudentId) {
+            const roster = await loadLessonRosterState(tx, cls);
+            if (!roster.expectedStudentIds.includes(normalizedStudentId)) {
+                return { success: false, status: 403, code: 'LESSON_STUDENT_NOT_ASSIGNED', error: 'Ученик не входит в состав этого урока' };
+            }
+        }
 
         const homeworkSource = await resolveReviewedHomeworkClass(
             tx,
@@ -542,6 +548,12 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
             return { success: false, error: 'Для пробного без карточки ученика используйте участника заявки', status: 400 };
         }
         const normalizedStudentId = isVirtualTrial ? null : (studentId || null);
+        if (normalizedStudentId) {
+            const roster = await loadLessonRosterState(tx, cls);
+            if (!roster.expectedStudentIds.includes(normalizedStudentId)) {
+                return { success: false, status: 403, code: 'LESSON_STUDENT_NOT_ASSIGNED', error: 'Ученик не входит в состав этого урока' };
+            }
+        }
 
         const homeworkSource = await resolveReviewedHomeworkClass(
             tx,

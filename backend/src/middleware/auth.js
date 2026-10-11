@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const { effectivePermissions, requiredPermissions, permissionTargetUserId } = require('../services/rolePermissions');
 const { prisma } = require('../config/db');
 const { isActiveCrmAccount } = require('../utils/accountStatus');
 const { sessionVersionMatches, signSession } = require('../utils/sessionVersion');
@@ -56,7 +57,8 @@ const authenticate = async (req, res, next) => {
         // Локальный demo-режим (только в dev-окружении)
         if (isLocalDemoUserId(userId) && process.env.NODE_ENV === 'development') {
             req.user = buildLocalDemoUser(decoded, userId);
-            return next();
+            if (['teacher', 'student'].includes(req.user.role)) return res.status(403).json({ success: false, error: 'Доступ к CRM запрещён' });
+            return enforceActionPermissions(req, res, next);
         }
 
         const user = await prisma.student.findUnique({ where: { id: userId } });
@@ -92,7 +94,7 @@ const authenticate = async (req, res, next) => {
         delete user.password;
         req.user = user;
 
-        next();
+        return enforceActionPermissions(req, res, next);
     } catch (error) {
         if (error.name === 'JsonWebTokenError') {
             console.error('❌ JWT ошибка (неверный токен):', error.message);
@@ -122,6 +124,26 @@ const authenticate = async (req, res, next) => {
         }
     }
 };
+
+// Read on each request, including cached replays: revocation is immediate across workers.
+async function enforceActionPermissions(req, res, next) {
+    if (req.user.role === 'super_admin') return next();
+    try {
+        const targetId = permissionTargetUserId(req);
+        const target = targetId ? await prisma.student.findUnique({ where: { id: targetId }, select: { role: true } }) : null;
+        const required = requiredPermissions(req, target?.role);
+        if (!required.length) return next();
+        const configured = await prisma.rolePermissions.findUnique({ where: { role: req.user.role } });
+        const permissions = effectivePermissions(req.user.role, configured?.permissions);
+        if (required.some(key => !permissions[key])) {
+            return res.status(403).json({ success: false, code: 'ACTION_PERMISSION_DENIED', error: 'Это действие запрещено в настройках вашей роли.' });
+        }
+        return next();
+    } catch (error) {
+        console.error('Permission lookup failed:', error.message);
+        return res.status(503).json({ success: false, error: 'Не удалось проверить права. Повторите запрос позже.' });
+    }
+}
 
 const requireSuperAdmin = (req, res, next) => {
     if (!req.user) {

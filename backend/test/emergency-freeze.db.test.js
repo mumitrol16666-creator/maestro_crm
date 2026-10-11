@@ -156,7 +156,7 @@ if (!process.env.TEST_DATABASE_URL) {
         for (const integration of [false, true]) {
             const result = await request(c, 'reopen', { reason: 'QA inconsistent history' }, integration);
             assert.equal(result.status, 409, JSON.stringify(result.body));
-            assert.equal(result.body.code, 'EMERGENCY_FREEZE_LEDGER_CONFLICT');
+            assert.equal(result.body.code, integration ? 'CRM_REOPEN_REQUIRED' : 'EMERGENCY_FREEZE_LEDGER_CONFLICT');
         }
         assert.deepEqual(await counters(f), [0, 0]);
         assert.equal((await prisma.class.findUnique({ where: { id: c.id } })).status, 'completed');

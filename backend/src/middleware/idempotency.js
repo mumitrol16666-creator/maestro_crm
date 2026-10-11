@@ -7,6 +7,9 @@ const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticat
     // Payments authenticate first and persist their outcome in the same DB
     // transaction as the balance. The short-lived HTTP cache cannot own them.
     const requestPath = req.path || req.originalUrl;
+    // Disabled financial commands must reach their CRM-only rejection even if
+    // a previous release left a successful response in the HTTP cache.
+    if (/^\/api\/integration\/v1\/classes\/[^/]+\/(?:approve|reopen)\/?(?:\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/payments(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/students\/[^/]+\/balance-adjustment\/?(?:\?|$)/i.test(requestPath)) return next();
     // Never replay credentials or login results. These paths must execute their

@@ -139,13 +139,6 @@ async function applySidebarVisibility() {
             whatsapp_inbox: true
         };
 
-        // Разделы, которые ДОЛЖНЫ быть видны для определенных ролей, игнорируя API (Anti-Lockout)
-        const forcedVisibility = {
-            'sales_manager': ['membership_actions', 'shop'],
-            'admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'shop', 'whatsapp_reminders', 'whatsapp_inbox'],
-            'super_admin': ['users', 'activity_logs', 'student_history', 'analytics', 'lesson_review', 'cashbox', 'salary', 'membership_actions', 'shop', 'whatsapp_reminders', 'whatsapp_inbox']
-        };
-
         Object.keys(sectionLinks).forEach(section => {
             const link = sectionLinks[section];
             if (link) {
@@ -153,24 +146,10 @@ async function applySidebarVisibility() {
                 if (userRole === 'teacher') {
                     isVisible = teacherAllowedSections.has(section);
                 } else {
-                    // Проверяем принудительную видимость
-                    const roleForcedSections = forcedVisibility[userRole];
-                    const isForced = roleForcedSections && roleForcedSections.includes(section);
-
-                    if (isForced) {
-                        // ✅ Всегда показываем, если раздел в списке принудительных
-                        isVisible = true;
-                    } else {
-                        // Иначе используем значение из API
-                        const apiValue = currentRolePermissions.visibility?.[section];
-                        if (apiValue !== undefined) {
-                            isVisible = apiValue;
-                        } else if (['admin', 'super_admin'].includes(userRole) && adminDefaultVisibility[section] !== undefined) {
-                            isVisible = adminDefaultVisibility[section];
-                        } else {
-                            isVisible = false;
-                        }
-                    }
+                    const apiValue = currentRolePermissions.visibility?.[section];
+                    isVisible = apiValue !== undefined
+                        ? apiValue === true
+                        : ['admin', 'super_admin'].includes(userRole) && adminDefaultVisibility[section] === true;
                 }
                 link.style.display = isVisible ? 'flex' : 'none';
             }

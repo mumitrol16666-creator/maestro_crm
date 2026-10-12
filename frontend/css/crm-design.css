@@ -207,6 +207,8 @@
         .admin-body[data-viewport="compact"] #studentsTable td:is(:first-child,:nth-child(4),:nth-child(5)){grid-column:1/-1}
         .admin-body[data-viewport="compact"] #studentsTable td:nth-child(4) .card-field{flex-direction:row;align-items:center;gap:12px}
         .admin-body[data-viewport="compact"] #studentsTable td:nth-child(2) .card-field-value{overflow-wrap:anywhere}
+        .admin-body #studentsTable .phone-contact{flex-wrap:wrap;gap:6px}
+        .admin-body #studentsTable .phone-number{font-size:13px;white-space:nowrap}
         .admin-body .search-box{flex:1 1 100%;min-width:0}
         .admin-body :is(.admin-input,.admin-select,.search-box input,.form-group input,.form-group select,.form-group textarea,.enrollment-field input,.enrollment-field select){font-size:16px!important;min-height:44px}
         .admin-body :is(.admin-btn,.btn-primary,.btn-secondary,.table-btn){min-height:44px}

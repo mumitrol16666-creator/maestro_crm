@@ -10,7 +10,7 @@ const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticat
     // Disabled financial commands must reach their CRM-only rejection even if
     // a previous release left a successful response in the HTTP cache.
     if (/^\/api\/integration\/v1\/classes\/[^/]+\/(?:approve|reopen)\/?(?:\?|$)/i.test(requestPath)) return next();
-    if (/^\/api\/(?:enrollments|subscription-periods)(?:\/|\?|$)/i.test(requestPath)) return next();
+    if (/^\/api\/(?:enrollments|subscription-periods|document-scans)(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/payments(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/students\/[^/]+\/balance-adjustment\/?(?:\?|$)/i.test(requestPath)) return next();
     // Never replay credentials or login results. These paths must execute their

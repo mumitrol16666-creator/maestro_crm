@@ -8,3 +8,5 @@
 [data-theme=light] .enrollment-notice{background:#fcf5de;color:#483713}
 [data-theme=light] .enrollment-queue button{background:#f6f2e8;color:#222}
 [data-theme=light] .enrollment-error{background:#fff0f0;color:#842a2a}
+
+.document-scans-modal{z-index:11010}.document-scans-modal .scan-filename{overflow-wrap:anywhere}.document-scans-modal input[type=file]{max-width:100%}

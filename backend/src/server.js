@@ -210,6 +210,7 @@ app.use('/api/users', require('./routes/users'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/enrollments', require('./routes/enrollments'));
 app.use('/api/subscription-periods', require('./routes/subscriptionPeriods'));
+app.use('/api/document-scans', require('./routes/documentScans'));
 app.use('/api/students', require('./routes/students'));
 app.use('/api/groups', require('./routes/groups'));
 app.use('/api/directions', require('./routes/directions'));

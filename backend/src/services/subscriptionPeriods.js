@@ -273,7 +273,7 @@ async function studentPeriods(studentId, db = prisma) {
         periods.push({ membership: m, ...c.state, creditLimit: c.creditLimit, pendingInstallment });
     }
     const pendingRenewal = await db.subscriptionRenewal.findFirst({ where: { studentId, confirmedAt: null, cancelledAt: null } });
-    const documents = await db.renewalDocument.findMany({ where: { renewal: { studentId, cancelledAt: null } }, select: documentSelect, orderBy: { createdAt: 'desc' } });
+    const documents = await db.renewalDocument.findMany({ where: { renewal: { studentId }, OR: [{ renewal: { cancelledAt: null } }, { scans: { some: {} } }] }, select: { ...documentSelect, renewal: { select: { cancelledAt: true } } }, orderBy: { createdAt: 'desc' } });
     return { student, periods, documents, documentDefaults: await documentDefaults(db, studentId),
         pendingRenewal: pendingRenewal ? { ...pendingRenewal, ...datesFor(pendingRenewal.paymentPayload, pendingRenewal.terms.days) } : null };
 }

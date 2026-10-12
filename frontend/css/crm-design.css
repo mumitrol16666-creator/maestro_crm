@@ -1,0 +1,242 @@
+/* Maestro CRM. Brandbook: Inter / Playfair, ink / cream / muted gold.
+   Screen-only geometry keeps document and schedule printouts unchanged.
+   This layer owns presentation; application state stays in existing modules. */
+@font-face{font-family:Maestro Inter;src:url('/assets/fonts/Inter.woff2') format('woff2');font-weight:100 900;font-style:normal;font-display:swap}
+@font-face{font-family:Maestro Playfair;src:url('/assets/fonts/PlayfairDisplay.woff2') format('woff2');font-weight:400 900;font-style:normal;font-display:swap}
+
+@media screen {
+    :root,html[data-theme="dark"] {
+        --theme-page:#0d0d0d; --theme-surface:#191918; --theme-surface-2:#20201e; --theme-surface-3:#242422;
+        --theme-text:#f5f2ea; --theme-muted:#b4b1a8; --theme-faint:#8c8980;
+        --theme-border:#33322e; --theme-border-strong:#514c40;
+        --theme-accent:#c59a44; --theme-accent-strong:#c59a44; --theme-accent-contrast:#17140e;
+        --theme-success:#73cda5; --theme-warning:#e7bd6b; --theme-danger:#f19393;
+        --theme-overlay:rgba(0,0,0,.72); --theme-shadow:0 24px 80px rgba(0,0,0,.38);
+    }
+    html[data-theme="light"] {
+        --theme-page:#f5f2ea; --theme-surface:#fffdf8; --theme-surface-2:#f0ede5; --theme-surface-3:#e9e5db;
+        --theme-text:#2b2a28; --theme-muted:#6b655a; --theme-faint:#797267;
+        --theme-border:#dad4c6; --theme-border-strong:#aaa18c;
+        --theme-accent:#866326; --theme-accent-strong:#c59a44; --theme-accent-contrast:#17140e;
+        --theme-success:#176444; --theme-warning:#825d1a; --theme-danger:#a73232;
+        --theme-overlay:rgba(13,13,13,.6); --theme-shadow:0 24px 80px rgba(0,0,0,.2);
+    }
+    body.admin-body {
+        --font-main:'Maestro Inter',Arial,sans-serif; --font-display:'Maestro Playfair',Georgia,serif;
+        --admin-bg:var(--theme-page); --admin-card:var(--theme-surface); --admin-text:var(--theme-text);
+        --admin-text-muted:var(--theme-muted); --admin-border:var(--theme-border);
+        --ops-bg:var(--theme-page); --ops-surface:var(--theme-surface); --ops-surface-2:var(--theme-surface-2);
+        --ops-border:var(--theme-border); --ops-muted:var(--theme-muted); --ops-gold:var(--theme-accent);
+        --pink:var(--theme-accent); --pink-light:#f5c45c; --pink-dark:#a67c2e; --white:var(--theme-text);
+        font-family:var(--font-main); font-size:14px; line-height:1.5; -webkit-font-smoothing:antialiased;
+    }
+    .admin-body :is(button,input,select,textarea){font-family:var(--font-main)}
+    .admin-body :is(button,a,[role=button]){touch-action:manipulation}
+    .admin-body :is(input,textarea){cursor:text!important}
+    .admin-body :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible{outline:2px solid #f5c45c!important;outline-offset:3px}
+    html[data-theme="light"] .admin-body :is(button,a,input,select,textarea,summary,[tabindex]):focus-visible{outline-color:#866326!important}
+    .admin-body button:disabled{cursor:not-allowed!important;opacity:.5}
+    .admin-body :is(.admin-table,.student-kpi,.ops-metric,.shop-metric){font-variant-numeric:tabular-nums}
+    .admin-body .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+    .admin-body [hidden]{display:none!important}
+    .crm-skip-link{position:fixed;left:18px;top:-100px;z-index:20000;background:#f5c45c;color:#0d0d0d;padding:12px 18px;border-radius:8px}
+    .crm-skip-link:focus{top:12px}
+
+    /* The sidebar is a stable, quiet anchor in either saved theme. */
+    .admin-body .admin-sidebar{background:#111110!important;border-right:1px solid #33322e!important;box-shadow:none}
+    .admin-body .sidebar-header{padding:20px 18px!important;min-height:104px;border-bottom:1px solid #33322e}
+    .admin-body .sidebar-brand{margin:0;gap:12px}
+    .admin-body .sidebar-brand__img{width:64px;height:64px;border-radius:0;object-fit:contain}
+    .admin-body .sidebar-header .maestro-text-logo__title{font-family:var(--font-display);font-size:25px;color:#f5f2ea;letter-spacing:-.02em}
+    .admin-body .sidebar-header .maestro-text-logo__subtitle{color:#c59a44;font-size:9px;letter-spacing:.14em;margin-top:8px}
+    .admin-body .sidebar-close{color:#b4b1a8!important;right:8px!important;top:8px!important}
+    .admin-body .sidebar-nav{padding:16px 10px!important}
+    .admin-body .sidebar-nav-group + .sidebar-nav-group{margin-top:20px}
+    .admin-body .sidebar-nav :is(h3,.sidebar-nav-label){font:600 10px/1.5 var(--font-main);letter-spacing:.12em;text-transform:uppercase;color:#938a76;margin:0 12px 8px;padding:0}
+    .admin-body .sidebar-link{position:relative;min-height:43px;margin:3px 0!important;padding:10px 12px!important;border:1px solid transparent!important;border-radius:8px!important;font-size:13px!important;font-weight:500;color:#b4b1a8!important;gap:12px;line-height:1.35;box-shadow:none!important;transition:background .15s,color .15s}
+    .admin-body .sidebar-link{width:100%!important}
+    .admin-body .sidebar-link svg{width:18px!important;height:18px!important;min-width:18px!important;padding:0;border:0;background:transparent!important;flex-shrink:0;stroke-width:1.65}
+    .admin-body .sidebar-link:hover{background:#20201d!important;color:#f5f2ea!important}
+    .admin-body .sidebar-link.active{background:#292419!important;border-color:#524329!important;color:#edcc88!important}
+    .admin-body .sidebar-link.active::before{content:'';position:absolute;left:-11px;top:12px;bottom:12px;width:3px;border-radius:0 3px 3px 0;background:#c59a44}
+    .admin-body .sidebar-footer{border-top:1px solid #33322e;background:#111110;padding:12px}
+    .admin-body .sidebar-footer :is(strong,.user-name){color:#f5f2ea}
+    .admin-body .sidebar-footer :is(small,.user-role){color:#b4b1a8}
+
+    .admin-body .admin-header{min-height:88px;padding:18px 32px!important;background:var(--theme-page)!important;border-bottom:1px solid var(--theme-border)!important;box-shadow:none;gap:20px}
+    .admin-body .admin-page-title{font:500 clamp(26px,2.4vw,34px)/1.2 var(--font-display);letter-spacing:-.025em;text-transform:none;margin:0;text-wrap:balance}
+    .admin-body .admin-section{padding:28px 32px!important}
+    .admin-body .theme-toggle{min-height:38px;padding:8px 12px;border-radius:8px;font-size:10px;letter-spacing:.08em;box-shadow:none}
+    .admin-body .section-header{gap:20px;align-items:center;margin-bottom:24px}
+    .crm-section-intro span{display:block;color:var(--theme-text);font-size:16px;font-weight:600}
+    .crm-section-intro p{margin:5px 0 0;color:var(--theme-muted);font-size:12px}
+
+    /* Controls: filled gold is an action; a selected filter is a quiet tint. */
+    .admin-body :is(.admin-btn,.btn-primary,.btn-secondary,.table-btn,.ops-refresh){display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:10px 15px!important;border:1px solid var(--theme-border-strong);border-radius:8px!important;font-size:12px!important;font-weight:600;line-height:1.4;letter-spacing:0!important;text-transform:none;box-shadow:none!important;transition:background .15s,border-color .15s,color .15s}
+    .admin-body :is(.btn-primary,.admin-btn.btn-primary,.modal-submit){background:var(--theme-accent-strong)!important;border-color:var(--theme-accent-strong)!important;color:var(--theme-accent-contrast)!important}
+    .admin-body :is(.btn-primary,.admin-btn.btn-primary,.modal-submit):hover{background:#d5ad60!important;border-color:#d5ad60!important}
+    .admin-body :is(.btn-secondary,.ops-refresh){background:var(--theme-surface)!important;color:var(--theme-text)!important}
+    .admin-body :is(.btn-secondary,.ops-refresh):hover{background:var(--theme-surface-2)!important;border-color:var(--theme-accent)!important}
+    .admin-body :is(.filter-btn,.student-detail-tab){min-height:38px;padding:9px 13px!important;border:1px solid transparent!important;border-radius:7px!important;background:transparent!important;color:var(--theme-muted)!important;font-size:12px!important;font-weight:500;letter-spacing:0;text-transform:none;box-shadow:none!important}
+    .admin-body :is(.filter-btn.active,.student-detail-tab.is-active){background:color-mix(in srgb,var(--theme-accent) 14%,var(--theme-surface))!important;color:var(--theme-text)!important;border-color:color-mix(in srgb,var(--theme-accent) 45%,var(--theme-border))!important}
+    .admin-body :is(.filter-btn,.student-detail-tab):hover{color:var(--theme-text)!important;background:var(--theme-surface-2)!important}
+    .admin-body :is(.admin-input,.admin-select,.form-group input,.form-group select,.form-group textarea,.enrollment-field input,.enrollment-field select){min-height:42px;padding:11px 13px!important;border-radius:8px;font-size:13px!important;letter-spacing:0;line-height:1.5}
+    .admin-body :is(.form-group label,.enrollment-field){font-size:12px!important;font-weight:500;letter-spacing:0!important;text-transform:none;color:var(--theme-muted)}
+    .admin-body .filters-search-row{display:flex;flex-direction:row;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:18px}
+    .admin-body .filters{display:flex;gap:4px;flex-wrap:wrap;flex:1 1 auto;width:auto}
+    .admin-body .search-box{position:relative;display:block;flex:0 1 280px;width:auto;margin:0;padding:0!important;border:0!important;background:transparent!important;min-width:200px}
+    .admin-body .search-box input{width:100%;min-height:42px;padding:10px 12px 10px 40px!important;border:1px solid var(--theme-border)!important;border-radius:8px;font-size:13px!important}
+    .admin-body .search-box>svg{position:absolute;left:13px;top:50%;transform:translateY(-50%);width:17px;height:17px;color:var(--theme-muted);pointer-events:none}
+
+    .admin-body .table-wrapper{border:1px solid var(--theme-border);border-radius:12px!important;box-shadow:none;overflow-x:auto}
+    .admin-body .admin-table{border-collapse:collapse;font-size:13px}
+    .admin-body .admin-table th{padding:14px 16px!important;background:var(--theme-surface-2)!important;font-size:10px!important;font-weight:600;letter-spacing:.055em;line-height:1.5;border-bottom:1px solid var(--theme-border)}
+    .admin-body .admin-table td{padding:16px!important;font-size:13px!important;line-height:1.5;border-bottom:1px solid var(--theme-border);vertical-align:middle}
+    .admin-body .admin-table tr:last-child td{border-bottom:0}
+    .admin-body .admin-table td strong{font-weight:600}
+    .admin-body .admin-table .table-btn{min-height:34px;padding:7px 10px!important;font-size:11px!important}
+    .admin-body .student-sort{font:inherit;letter-spacing:inherit}
+    .admin-body .table-message td{padding:40px 20px!important;color:var(--theme-muted);text-align:center}
+    .admin-body #studentsTable .student-name-with-avatar{display:flex;align-items:flex-start;gap:12px;white-space:normal}
+    .admin-body #studentsTable .student-name-with-avatar>span:last-child{min-width:0;font-weight:500}
+    .admin-body #studentsTable .student-name-with-avatar small{font-weight:400;margin-top:5px}
+    .admin-body #studentsTable small{color:var(--theme-muted)!important}
+    .admin-body #studentsTable :is(.student-list-avatar,.student-age-badge){color:var(--theme-accent)}
+    .admin-body #studentsTable .student-age-badge{font-size:10px;padding:1px 5px}
+    .admin-body #studentsTable .student-safety{margin-top:8px}
+
+    /* Dashboard and working panels share restrained surfaces, not glows. */
+    .admin-body .ops-hero{padding:24px 26px!important;border:1px solid var(--theme-border)!important;border-radius:12px!important;background:var(--theme-surface)!important;box-shadow:none;margin-bottom:20px!important}
+    .admin-body .ops-hero h2{font:500 clamp(24px,2.5vw,32px)/1.25 var(--font-display)!important;letter-spacing:-.02em;margin:8px 0!important}
+    .admin-body :is(.ops-eyebrow,.student-detail-eyebrow,.enrollment-eyebrow){font-size:10px!important;font-weight:600;letter-spacing:.12em!important;color:var(--theme-accent)!important}
+    .admin-body .ops-hero p:not(.ops-eyebrow){color:var(--theme-muted);font-size:13px}
+    .admin-body :is(.ops-panel,.ops-metric,.shop-metrics,.student-card,.student-overview-card){border:1px solid var(--theme-border)!important;border-radius:12px!important;box-shadow:none!important}
+    .admin-body .ops-panel-head{padding:20px!important}
+    .admin-body .ops-panel-head h3{font-size:15px;font-weight:600;letter-spacing:0}
+    .admin-body .ops-metric{padding:20px!important}
+    .admin-body .ops-metric>span{font-size:28px;font-weight:500;letter-spacing:-.025em}
+    .admin-body .ops-metric>strong{font-size:12px;font-weight:600}
+    .admin-body .ops-metric>small{font-size:11px;color:var(--theme-muted)}
+
+    /* Details and forms remain scrollable, including keyboard focus. */
+    .admin-body .modal-content{border:1px solid var(--theme-border);border-radius:16px!important;overscroll-behavior:contain;padding:28px!important}
+    .admin-body .modal-title{font:500 26px/1.25 var(--font-display)!important;text-transform:none;letter-spacing:-.02em!important}
+    .admin-body .modal-close{box-shadow:none!important}
+    .admin-body #studentDetailModal .student-detail-modal{width:min(1200px,96vw);max-width:1200px}
+    .admin-body .student-detail-header{padding:0 48px 20px 0;gap:20px;background:var(--theme-surface);backdrop-filter:none}
+    .admin-body .student-detail-header .modal-title{font-size:clamp(23px,2.5vw,32px)!important;margin:8px 0 0!important}
+    .admin-body .student-detail-header .student-age-badge{font-family:var(--font-main);font-size:11px;letter-spacing:0}
+    .admin-body .student-detail-header .student-header-icon-btn{width:38px;height:38px;min-height:38px;padding:0!important}
+    .admin-body .student-detail-close{top:0!important;right:0!important;min-height:38px;width:38px;height:38px;border:1px solid var(--theme-border)!important;border-radius:8px}
+    .admin-body .student-basic-info{border-radius:12px;background:var(--theme-surface);box-shadow:none}
+    .admin-body .student-profile-identity{min-height:0;padding:20px;align-items:flex-start}
+    .admin-body .student-profile-identity__content{flex:1}
+    .admin-body .student-profile-identity__content>.admin-btn{margin:12px 8px 0 0}
+    .admin-body .student-overview-meta{font-size:12px;margin-top:10px;gap:16px}
+    .admin-body .student-kpi{min-height:94px;padding:18px 20px}
+    .admin-body .student-kpi span{font-size:11px;font-weight:500;margin-bottom:10px}
+    .admin-body .student-kpi strong{font-size:21px;font-weight:600;letter-spacing:-.02em}
+    .admin-body .student-detail-tabs{padding:4px;gap:4px;border-radius:10px;background:var(--theme-surface)}
+    .admin-body .student-section-heading{margin:8px 0 0;align-items:center}
+    .admin-body .student-section-heading h3{font:500 24px/1.3 var(--font-display);letter-spacing:-.01em}
+    .admin-body .student-section-heading p{font-size:12px;color:var(--theme-muted);max-width:360px}
+    .admin-body .student-card-title{font:600 11px/1.5 var(--font-main)!important;letter-spacing:.07em;color:var(--theme-muted);margin-bottom:16px}
+    .admin-body .student-secondary-grid{align-items:start;gap:20px}
+    .admin-body .student-card--section{padding:20px;min-height:0}
+    .admin-body #studentMembershipInfo{min-height:0;flex:0 0 auto}
+    .admin-body .student-card-action{white-space:normal}
+    .admin-body .student-finance-actions{gap:8px;flex-wrap:wrap}
+
+    /* Enrollment: visible steps at left, one working area at right. */
+    .admin-body .enrollment-dialog{width:min(1140px,96vw);max-width:1140px;padding:28px!important}
+    .admin-body .enrollment-dialog>header{gap:24px;align-items:flex-start;margin-bottom:22px;padding-bottom:20px;border-bottom:1px solid var(--theme-border)}
+    .admin-body .enrollment-dialog>header h2{font:500 28px/1.3 var(--font-display);letter-spacing:-.02em;margin:7px 0 0}
+    .admin-body .enrollment-dialog>header [data-close]{min-width:36px;min-height:36px;padding:6px!important}
+    .admin-body #enrollmentContent:has(>.enrollment-steps){display:grid;grid-template-columns:220px minmax(0,1fr);grid-template-rows:auto 1fr;column-gap:28px;align-items:start}
+    .admin-body .enrollment-steps{grid-column:1;grid-row:1/3;display:flex;flex-direction:column;gap:6px;padding-right:20px;border-right:1px solid var(--theme-border);margin:0}
+    .admin-body .enrollment-steps button{display:flex;gap:10px;align-items:center;padding:12px!important;min-height:54px;font-size:12px;line-height:1.4;border:1px solid transparent;border-radius:8px;background:transparent;color:var(--theme-muted);font-weight:500;text-align:left}
+    .admin-body .enrollment-step-number{display:grid;place-items:center;width:24px;height:24px;flex:0 0 24px;border:1px solid var(--theme-border-strong);border-radius:50%;font-size:11px;color:var(--theme-muted)}
+    .admin-body .enrollment-steps button.is-current{background:#c59a44;color:#17140e;border-color:#c59a44}
+    .admin-body .enrollment-steps button.is-current .enrollment-step-number{border-color:#76602f;color:#17140e}
+    .admin-body .enrollment-steps button.is-complete:not(.is-current) .enrollment-step-number{color:var(--theme-success);border-color:var(--theme-success)}
+    .admin-body .enrollment-saving{grid-column:2;margin:0 0 20px!important;font-size:11px;line-height:1.6;color:var(--theme-muted)}
+    .admin-body #enrollmentStep{grid-column:2;min-width:0}
+    .admin-body #enrollmentStep>h3{font:500 24px/1.3 var(--font-display);margin:0 0 12px}
+    .admin-body .enrollment-dialog p{font-size:13px;line-height:1.65}
+    .admin-body .enrollment-dialog .enrollment-fields{gap:18px 20px;margin:24px 0}
+    .admin-body .enrollment-dialog :is(fieldset,.enrollment-account){padding:20px;border:1px solid var(--theme-border);border-radius:10px;background:var(--theme-surface-2)}
+    .admin-body .enrollment-dialog :is(.enrollment-notice,.enrollment-error){padding:16px;border-radius:10px;background:color-mix(in srgb,var(--theme-accent) 8%,var(--theme-surface));color:var(--theme-text);border-color:var(--theme-border-strong)}
+    .admin-body .enrollment-dialog .enrollment-error{color:var(--theme-danger);border-color:var(--theme-danger)}
+    .admin-body .enrollment-signatures>div{padding:16px 0;border-bottom:1px solid var(--theme-border);font-size:13px}
+    .admin-body .enrollment-signatures button{flex-shrink:0}
+    .admin-body .enrollment-actions{gap:10px;margin:20px 0}
+    .admin-body .enrollment-queue button{background:var(--theme-surface-2);border-color:var(--theme-border);padding:18px;border-radius:10px;font-size:13px}
+    .admin-body .enrollment-queue small{color:var(--theme-muted);margin-top:6px;line-height:1.5}
+    .admin-body .document-scans-modal input[type=file]::file-selector-button{background:var(--theme-surface-3);color:var(--theme-text);border:1px solid var(--theme-border-strong);border-radius:5px;padding:7px 10px;margin-right:12px;font:inherit}
+
+    @media(min-width:1101px){
+        html[data-initial-viewport="wide"] body.admin-body,.admin-body{--admin-sidebar-width:252px}
+        .admin-body .sidebar-header>.sidebar-close{display:none}
+        .admin-body #section-schedule #calendar{min-width:0}
+        .admin-body #section-students .admin-table{table-layout:fixed;width:100%}
+        .admin-body #section-students .admin-table th:nth-child(1){width:29%}
+        .admin-body #section-students .admin-table th:nth-child(2){width:17%}
+        .admin-body #section-students .admin-table th:nth-child(3){width:17%}
+        .admin-body #section-students .admin-table th:nth-child(4){width:11%}
+        .admin-body #section-students .admin-table th:nth-child(5){width:26%}
+    }
+    @media(max-width:1100px){
+        .admin-body .admin-header{padding:16px 20px!important;min-height:76px}
+        .admin-body .admin-section{padding:22px 20px!important}
+        .admin-body .sidebar-nav{padding-bottom:24px}
+    }
+    @media(max-width:760px){
+        .admin-body .admin-section{padding:18px 14px!important}
+        .admin-body .admin-header{padding:14px!important;gap:12px;min-height:70px}
+        .admin-body .admin-page-title{font-size:25px!important;white-space:normal!important;overflow-wrap:anywhere}
+        .admin-body .admin-header .admin-user{display:none}
+        .admin-body .admin-header :is(.theme-toggle,.sidebar-toggle){min-width:44px;min-height:44px}
+        .admin-body .section-header{align-items:flex-start;flex-direction:column;gap:14px}
+        .admin-body .filters-search-row{gap:12px}
+        .admin-body .filters{gap:4px;flex-wrap:nowrap;overflow-x:auto;max-width:100%;padding:3px 2px 7px}
+        .admin-body .filter-btn{flex:0 0 auto;white-space:nowrap}
+        .admin-body #section-students .table-wrapper{border:0;background:transparent}
+        .admin-body #section-students .admin-table{border:0!important;background:transparent!important}
+        .admin-body[data-viewport="compact"] #studentsTable tr{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 12px;padding:16px;border-radius:12px;box-shadow:none}
+        .admin-body[data-viewport="compact"] #studentsTable td{padding:12px 0!important;min-width:0}
+        .admin-body[data-viewport="compact"] #studentsTable td:is(:first-child,:nth-child(4),:nth-child(5)){grid-column:1/-1}
+        .admin-body[data-viewport="compact"] #studentsTable td:nth-child(4) .card-field{flex-direction:row;align-items:center;gap:12px}
+        .admin-body[data-viewport="compact"] #studentsTable td:nth-child(2) .card-field-value{overflow-wrap:anywhere}
+        .admin-body #studentsTable .phone-contact{flex-wrap:wrap;gap:6px}
+        .admin-body #studentsTable .phone-number{font-size:13px;white-space:nowrap}
+        .admin-body .search-box{flex:1 1 100%;min-width:0}
+        .admin-body :is(.admin-input,.admin-select,.search-box input,.form-group input,.form-group select,.form-group textarea,.enrollment-field input,.enrollment-field select){font-size:16px!important;min-height:44px}
+        .admin-body :is(.admin-btn,.btn-primary,.btn-secondary,.table-btn){min-height:44px}
+        .admin-body .modal-content{padding:20px!important;border-radius:12px!important;max-height:calc(100dvh - 24px);scroll-padding-block:20px;max-width:calc(100vw - 20px)}
+        .admin-body .student-detail-header{position:relative;padding-right:0;padding-top:32px;align-items:flex-start;gap:16px;flex-wrap:wrap}
+        .admin-body .student-detail-header .modal-title{font-size:24px!important}
+        .admin-body .student-detail-header-actions{justify-content:flex-start}
+        .admin-body .student-profile-identity{padding:16px;gap:12px}
+        .admin-body .student-profile-identity .student-avatar{width:44px;height:44px;flex-basis:44px;font-size:24px}
+        .admin-body .student-kpi-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+        .admin-body .student-kpi{min-height:92px;padding:14px;border-bottom:1px solid var(--theme-border)}
+        .admin-body .student-kpi strong{font-size:18px;white-space:normal}
+        .admin-body .student-kpi:nth-child(2n){border-right:0}
+        .admin-body .student-detail-tab{flex:0 0 auto}
+        .admin-body .student-secondary-grid{grid-template-columns:minmax(0,1fr)}
+        .admin-body .student-card--section{padding:16px}
+        .admin-body .enrollment-dialog{padding:20px!important;width:calc(100vw - 20px)}
+        .admin-body .enrollment-dialog>header h2{font-size:24px;overflow-wrap:anywhere}
+        .admin-body #enrollmentContent:has(>.enrollment-steps){grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto auto;gap:0}
+        .admin-body .enrollment-steps{grid-row:auto;grid-column:1;flex-direction:row;flex-wrap:nowrap;overflow-x:auto;border-right:0;border-bottom:1px solid var(--theme-border);padding:0 0 14px;margin-bottom:16px}
+        .admin-body .enrollment-steps button{flex:0 0 170px;min-height:64px}
+        .admin-body .enrollment-saving,.admin-body #enrollmentStep{grid-column:1}
+        .admin-body .enrollment-dialog .enrollment-fields{grid-template-columns:minmax(0,1fr)}
+        .admin-body .enrollment-signatures>div{align-items:flex-start;flex-direction:column}
+        .admin-body .enrollment-dialog :is(fieldset,.enrollment-account){padding:16px}
+        .admin-body .enrollment-dialog .enrollment-rate{gap:12px}
+        .admin-body .enrollment-dialog>header{gap:12px;margin-bottom:16px}
+    }
+    @media(prefers-reduced-motion:reduce){.admin-body *{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
+}
+@media print{.crm-skip-link{display:none}}

@@ -10,9 +10,9 @@ function initTheme() {
     const moonIcon = themeToggle?.querySelector('.theme-icon-moon');
     
     const validThemes = new Set(['dark', 'light']);
-    const storedTheme = localStorage.getItem('adminTheme');
-    const preferredTheme = window.matchMedia?.('(prefers-color-scheme: light)')?.matches ? 'light' : 'dark';
-    const initialTheme = validThemes.has(storedTheme) ? storedTheme : preferredTheme;
+    let storedTheme;
+    try { storedTheme = localStorage.getItem('adminTheme'); } catch {}
+    const initialTheme = validThemes.has(storedTheme) ? storedTheme : 'dark';
 
     function applyTheme(theme, persist = true) {
         const nextTheme = validThemes.has(theme) ? theme : 'dark';
@@ -28,7 +28,9 @@ function initTheme() {
         }
         if (sunIcon) sunIcon.style.display = isLight ? 'none' : 'block';
         if (moonIcon) moonIcon.style.display = isLight ? 'block' : 'none';
-        if (persist) localStorage.setItem('adminTheme', nextTheme);
+        const themeColor = document.querySelector('meta[name="theme-color"]');
+        if (themeColor) themeColor.content = isLight ? '#f5f2ea' : '#0d0d0d';
+        if (persist) { try { localStorage.setItem('adminTheme', nextTheme); } catch {} }
         window.dispatchEvent(new CustomEvent('adminthemechange', { detail: { theme: nextTheme } }));
     }
     

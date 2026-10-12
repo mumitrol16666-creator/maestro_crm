@@ -57,6 +57,7 @@ function requiredPermissions(req, targetRole) {
     const needs = new Set();
     const add = (...keys) => keys.forEach(key => needs.add(key));
     if (['activity-logs', 'integration-logs'].includes(resource)) add('canViewLogs');
+    if (resource === 'document-scans') add('canManageStudents');
     if (!write) return [...needs];
     if (resource === 'integration-logs' && action === 'retry') add('canManageStudents', 'canManageSchedule', 'canManagePayments', 'canCreateUsers');
     if (resource === 'permissions') add('canEditRoles');

@@ -1700,6 +1700,7 @@ model EnrollmentDocument {
   appendixSignedAt   DateTime?
   consentSignedAt    DateTime?
   signedById         String?
+  scans              DocumentScan[]
   @@unique([enrollmentId, revision])
 }
 
@@ -1756,6 +1757,30 @@ model RenewalDocument {
   createdAt       DateTime @default(now())
   signedAt        DateTime?
   signedById      String?
+  scans           DocumentScan[]
+}
+
+// Private originals: included in PostgreSQL backups; never served from public uploads.
+model DocumentScan {
+  id                   String @id @default(uuid())
+  enrollmentDocumentId String?
+  enrollmentDocument   EnrollmentDocument? @relation(fields: [enrollmentDocumentId], references: [id], onDelete: Restrict)
+  renewalDocumentId    String?
+  renewalDocument      RenewalDocument? @relation(fields: [renewalDocumentId], references: [id], onDelete: Restrict)
+  kind                 String
+  fileName             String
+  mimeType             String
+  size                 Int
+  digest               String
+  fileData             Bytes
+  uploadedById         String
+  createdAt            DateTime @default(now())
+  reviewVersion        Int @default(0)
+  withdrawnAt          DateTime?
+  reviewedById         String?
+  reviewReason         String?
+  @@unique([enrollmentDocumentId, kind, digest])
+  @@unique([renewalDocumentId, kind, digest])
 }
 
 model InstallmentIntent {

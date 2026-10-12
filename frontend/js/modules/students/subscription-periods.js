@@ -62,7 +62,8 @@
         target.scrollIntoView({ block: 'start', behavior: 'smooth' }); target.querySelector('input')?.focus();
     }
     function documentActions(doc) {
-        return `<div class="enrollment-notice"><p>Приложение № П-${h(doc.number)} · ${doc.signedAt ? `подписано ${day(doc.signedAt)}` : 'подпись ещё не отмечена'}</p><div class="enrollment-actions">${btn('print', 'Распечатать приложение', doc.id)}${!doc.signedAt ? btn('sign', 'Отметить подписание…', doc.id) : ''}</div></div>`;
+        if (doc.renewal?.cancelledAt) return `<div class="enrollment-notice"><p>Приложение № П-${h(doc.number)} · расчёт отменён ${day(doc.renewal.cancelledAt)}</p>${btn('scans', 'История сканов приложения', doc.id)}</div>`;
+        return `<div class="enrollment-notice"><p>Приложение № П-${h(doc.number)} · ${doc.signedAt ? `подписано ${day(doc.signedAt)}` : 'подпись ещё не отмечена'}</p><div class="enrollment-actions">${btn('print', 'Распечатать приложение', doc.id)}${btn('scans', 'Сканы подписанного приложения', doc.id)}${!doc.signedAt ? btn('sign', 'Отметить подписание…', doc.id) : ''}</div></div>`;
     }
     async function printDocument(id, tab) {
         if (!tab || tab.closed) throw new Error('Разрешите открытие окна печати и нажмите «Распечатать приложение» ещё раз.');
@@ -95,6 +96,7 @@
     }
     function dispatch(name, id) {
         if (busy) return;
+        if (name === 'scans') { window.openDocumentScans('renewal', id); return; }
         if (name === 'appendix') { appendixForm(id); return; }
         if (name === 'print') {
             const tab = openPrintWindow();

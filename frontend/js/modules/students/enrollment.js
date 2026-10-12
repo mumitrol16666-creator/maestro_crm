@@ -51,7 +51,12 @@
         const target = root.querySelector('#enrollmentContent');
         if (!state) return;
         step ||= state.nextStep || (state.remainingAmount > 0 ? 'payment' : 'summary');
-        target.innerHTML = `<nav class="enrollment-steps" aria-label="Шаги оформления">${state.steps.map((s, i) => `<button type="button" data-step="${s.key}" class="${step === s.key ? 'is-current' : ''}" ${step === s.key ? 'aria-current="step"' : ''}>${s.ready ? '✓' : i + 1} ${h(s.label)}</button>`).join('')}<button type="button" data-step="summary">Итог</button></nav><p class="enrollment-saving">Сохранённые шаги доступны другим администраторам. Несохранённые поля нужно сохранить перед переходом.</p><div id="enrollmentStep"></div>`;
+        target.innerHTML = `<nav class="enrollment-steps" aria-label="Шаги оформления">${state.steps.map((s, i) => `<button type="button" data-step="${s.key}" class="${step === s.key ? 'is-current' : ''} ${s.ready ? 'is-complete' : ''}" ${step === s.key ? 'aria-current="step"' : ''}><span class="enrollment-step-number" aria-hidden="true">${s.ready ? '✓' : i + 1}</span><span>${h(s.label)}${s.ready ? '<span class="sr-only"> — выполнено</span>' : ''}</span></button>`).join('')}<button type="button" data-step="summary" class="${step === 'summary' ? 'is-current' : ''}" ${step === 'summary' ? 'aria-current="step"' : ''}><span class="enrollment-step-number" aria-hidden="true">${state.steps.length + 1}</span><span>Итог оформления</span></button></nav><p class="enrollment-saving">Сохранённые шаги доступны другим администраторам. Несохранённые поля нужно сохранить перед переходом.</p><div id="enrollmentStep"></div>`;
+        const stepsNav = target.querySelector('.enrollment-steps');
+        const currentStep = stepsNav.querySelector('[aria-current="step"]');
+        if (currentStep && stepsNav.scrollWidth > stepsNav.clientWidth) {
+            stepsNav.scrollLeft += currentStep.getBoundingClientRect().left - stepsNav.getBoundingClientRect().left;
+        }
         target.querySelectorAll('[data-step]').forEach(el => el.onclick = () => { step = el.dataset.step; parentPreview = null; render(); });
         const pane = target.querySelector('#enrollmentStep');
         if (step === 'details') details(pane);

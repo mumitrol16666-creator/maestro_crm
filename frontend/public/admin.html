@@ -16,11 +16,15 @@
 
     <link rel="stylesheet" href="/css/styles.css?v=maestro1">
     <link rel="stylesheet" href="/css/maestro-brand.css?v=maestro1">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
-        rel="stylesheet">
+    <link rel="preload" href="/assets/fonts/Inter.woff2" as="font" type="font/woff2" crossorigin>
+    <meta name="theme-color" content="#0d0d0d">
+    <script>
+        (() => {
+            let theme = 'dark';
+            try { if (localStorage.getItem('adminTheme') === 'light') theme = 'light'; } catch {}
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
 
     <link rel="stylesheet" href="/css/admin-styles.css?v=maestro88">
     <link rel="stylesheet" href="/css/toast.css?v=5">
@@ -144,9 +148,11 @@
         })();
     </script>
     <link rel="stylesheet" href="/css/enrollment.css?v=3">
+    <link rel="stylesheet" href="/css/crm-design.css?v=1">
 </head>
 
 <body class="admin-body" data-viewport="">
+    <a class="crm-skip-link" href="#crmMain" onclick="event.preventDefault(); document.getElementById('crmMain').focus()">Перейти к содержимому</a>
     <!-- Loading Progress Bar -->
     <div class="loading-progress" id="loadingProgress"></div>
 
@@ -163,7 +169,7 @@
                 </svg>
             </button>
             <div class="maestro-text-logo sidebar-brand">
-                <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/maestro-icon.svg" alt="Maestro" width="40" height="40">
+                <img class="maestro-text-logo__img sidebar-brand__img" src="/assets/images/maestro-guitar.png" alt="" width="64" height="64">
                 <span>
                     <span class="maestro-text-logo__title">Maestro</span>
                     <span class="maestro-text-logo__subtitle">Панель школы</span>
@@ -358,10 +364,10 @@
     </aside>
 
     <!-- Main Content -->
-    <main class="admin-main">
+    <main class="admin-main" id="crmMain" tabindex="-1">
         <!-- Header -->
         <header class="admin-header">
-            <button class="sidebar-toggle" id="sidebarToggle">
+            <button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Открыть или свернуть меню">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <line x1="3" y1="12" x2="21" y2="12"></line>
                     <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -657,7 +663,8 @@
         <!-- Students Section -->
         <section class="admin-section hidden" id="section-students">
             <div class="section-header">
-                <button type="button" class="btn-primary" onclick="openEnrollmentQueue()">Оформления и доплаты</button>
+                <div class="crm-section-intro"><span>Ученики школы</span><p>Карточки, обучение и связь с семьёй</p></div>
+                <button type="button" class="btn-primary" onclick="openEnrollmentQueue()">Оформления и доплаты <span aria-hidden="true">↗</span></button>
             </div>
 
             <div class="filters-search-row">
@@ -677,7 +684,7 @@
                         <circle cx="11" cy="11" r="8"></circle>
                         <path d="m21 21-4.35-4.35"></path>
                     </svg>
-                    <input type="text" placeholder="Поиск..." id="studentSearch">
+                    <input type="search" placeholder="Найти ученика…" id="studentSearch" aria-label="Поиск учеников" autocomplete="off">
                 </div>
             </div>
 
@@ -3356,7 +3363,7 @@
     <script src="https://cdn.socket.io/4.7.4/socket.io.min.js"></script>
 
     <script src="/js/modules/core/utils.js?v=126"></script>
-    <script src="/js/modules/core/theme.js?v=104"></script>
+    <script src="/js/modules/core/theme.js?v=crm-design1"></script>
     <script src="/js/modules/core/socket.js?v=5"></script>
     <script src="/js/modules/core/data.js?v=105"></script>
     <script src="/js/modules/core/sidebar.js?v=116"></script>
@@ -3383,7 +3390,7 @@
     <script src="/js/modules/students/students.js?v=209"></script>
     <script src="/js/modules/students/student-print.js?v=2"></script>
     <script src="/js/modules/students/document-scans.js?v=1"></script>
-    <script src="/js/modules/students/enrollment.js?v=6"></script>
+    <script src="/js/modules/students/enrollment.js?v=7"></script>
     <script src="/js/modules/students/subscription-periods.js?v=3"></script>
     <script src="/js/modules/groups/groups.js?v=128"></script>
     <script src="/js/modules/users/users.js?v=140"></script>

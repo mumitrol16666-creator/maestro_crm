@@ -356,8 +356,10 @@ async function reopenClass(classId, actorId, reason, correction = null) {
     });
 
     if (result.success) {
+        // Пересмотр подтверждённого урока — не возврат преподавателю: отчёт на платформе
+        // остаётся подтверждённым, преподаватель получает только уведомление.
         syncOfflineLessonEventToLearningPlatform(
-            result.data?.previousStatus === 'completed' ? 'returned' : 'rescheduled',
+            result.data?.previousStatus === 'completed' ? 'reopened' : 'rescheduled',
             result.data?.class || {},
             result.studentIds,
             reason,

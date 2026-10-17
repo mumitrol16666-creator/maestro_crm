@@ -2941,12 +2941,19 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                 updated.id,
                 req.user.id,
             );
+            // Платформа рассылает итог урока по этому списку; без него ученики и родители
+            // уведомление не получают (интеграционный approve уже передаёт участников).
+            const finalAttendees = await tx.classAttendee.findMany({
+                where: { classId },
+                select: { studentId: true },
+            });
 
             return {
                 updated: payrollClass || updated,
                 deductions,
                 payrollAdjustment,
                 approvalException: reportApproval.exception,
+                studentIds: [...new Set(finalAttendees.map((attendee) => attendee.studentId).filter(Boolean))],
             };
         });
 
@@ -2962,7 +2969,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
         });
         notify('lesson.approved', {
             classRecord: result.updated,
-            deductions: result.deductions
+            deductions: result.deductions,
+            crmStudentIds: result.studentIds,
         }).catch(() => {});
 
         const receiptStudentIds = [...new Set(result.deductions.map((item) => item.studentId).filter(Boolean))];

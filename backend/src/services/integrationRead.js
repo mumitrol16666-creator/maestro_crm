@@ -1137,12 +1137,20 @@ async function getStudentOfflineSummary(crmStudentId) {
     const lessonHistory = buildStudentLessonHistory([...todayHistory, ...historyClasses], now);
 
     let debtAmount = Math.max(0, -(student.accountBalance || 0));
-    let classesRemainingTotal = 0;
+    // Остаток занятий есть только у пакетных абонементов; тариф с расценками
+    // списывает с баланса, и «0 занятий» для него не долг и не сигнал.
+    let classesRemainingTotal = null;
     let totalPaidAmount = 0;
+    let membershipDueAmount = 0;
     student.memberships.forEach((m) => {
-        classesRemainingTotal += m.classesRemaining;
-        totalPaidAmount += m.paidAmount;
+        if (m.billingModel !== 'rate_card') {
+            classesRemainingTotal = (classesRemainingTotal || 0) + (m.classesRemaining || 0);
+        }
+        totalPaidAmount += m.paidAmount || 0;
+        membershipDueAmount += Math.max(0, Number(m.remainingAmount) || 0);
     });
+    // Единая сумма к оплате для родителя: минус на балансе плюс недоплата по абонементам.
+    const amountDueAmount = debtAmount + membershipDueAmount;
     const currentMembership = student.memberships.find((m) => m.id === student.activeMembershipId)
         || student.memberships[0]
         || null;
@@ -1202,6 +1210,8 @@ async function getStudentOfflineSummary(crmStudentId) {
             balanceSnapshot: {
                 classesRemainingTotal,
                 debtAmountKzt: debtAmount,
+                membershipDueAmountKzt: membershipDueAmount,
+                amountDueKzt: amountDueAmount,
                 accountBalanceKzt: student.accountBalance,
                 totalPaidAmountKzt: totalPaidAmount,
                 currentMembership: currentMembership ? mapMembership(currentMembership) : null,

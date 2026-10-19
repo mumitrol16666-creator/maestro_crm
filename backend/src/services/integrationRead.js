@@ -74,6 +74,17 @@ function mapClassSummary(cls, { trialBooking = null } = {}) {
         teacher: mapTeacherRef(cls.teacher),
         room: cls.room ? { crmRoomId: cls.room.id, name: cls.room.name } : null,
         crmIndividualStudentId: cls.individualStudentId || null,
+        ...mapSubstitution(cls),
+    };
+}
+
+// A lesson handed to another teacher keeps its regular teacher in originalTeacherId.
+function mapSubstitution(cls) {
+    const teacherId = cls.teacherId || cls.teacher?.id || null;
+    const originalCrmTeacherId = cls.originalTeacherId || null;
+    return {
+        originalCrmTeacherId,
+        substitution: Boolean(teacherId && originalCrmTeacherId && teacherId !== originalCrmTeacherId),
     };
 }
 
@@ -1583,4 +1594,5 @@ module.exports = {
     getManagementDayOverview,
     buildExpectedPaymentOverview,
     mapClassDetail,
+    mapClassSummary,
 };

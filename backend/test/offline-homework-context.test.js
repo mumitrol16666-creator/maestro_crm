@@ -223,3 +223,21 @@ test('неоднозначная legacy-проверка не привязыва
     assert.equal(history.find((item) => item.crmClassId === 'lesson-1').homeworkReview, null);
     assert.equal(history.find((item) => item.crmClassId === 'lesson-2').homeworkReview, null);
 });
+
+test('a lesson handed to another teacher is marked as a substitution with the regular teacher', () => {
+    const base = {
+        id: 'class-sub', title: 'Гитара', date: new Date('2026-10-20T05:00:00.000Z'), startTime: '10:00', endTime: '11:00',
+        duration: 60, status: 'scheduled', classType: 'individual', deliveryFormat: 'offline', isPractice: false,
+        group: null, room: null, individualStudentId: 'student-1',
+        teacher: { id: 'teacher-2', name: 'Замена' },
+    };
+    const substituted = mapClassDetail({ ...base, teacherId: 'teacher-2', originalTeacherId: 'teacher-1' });
+    assert.equal(substituted.substitution, true);
+    assert.equal(substituted.originalCrmTeacherId, 'teacher-1');
+
+    const regular = mapClassDetail({ ...base, teacherId: 'teacher-2', originalTeacherId: 'teacher-2' });
+    assert.equal(regular.substitution, false);
+    const legacy = mapClassDetail({ ...base, teacherId: 'teacher-2', originalTeacherId: null });
+    assert.equal(legacy.substitution, false);
+    assert.equal(legacy.originalCrmTeacherId, null);
+});

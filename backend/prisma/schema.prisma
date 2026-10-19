@@ -253,6 +253,7 @@ model Student {
   classesTaught               Class[]               @relation("ClassTeacher")
   originallyAssignedClasses   Class[]               @relation("ClassOriginalTeacher")
   individualClasses           Class[]               @relation("IndividualStudentClass")
+  sectorExamLessons           ClassSectorExam[]
   managedClasses              Class[]               @relation("ClassManager")
   createdClasses              Class[]               @relation("ClassCreator")
   submittedClasses            Class[]               @relation("ClassSubmittedBy")
@@ -544,13 +545,27 @@ model MembershipPlan {
   @@index([legacyType, status])
 }
 
+/// Plan 1.11: one sector exam from the learning platform booked into an exam lesson.
+/// An exam lesson may hold several students' exams; the teacher is paid once per lesson.
+model ClassSectorExam {
+  id           String   @id @default(cuid())
+  classId      String
+  sectorExamId String   @unique
+  studentId    String
+  createdAt    DateTime @default(now())
+
+  class   Class   @relation(fields: [classId], references: [id], onDelete: Cascade)
+  student Student @relation(fields: [studentId], references: [id], onDelete: Restrict)
+
+  @@index([classId])
+  @@index([studentId])
+}
+
 model Class {
   id                String              @id @default(cuid())
   groupId           String?
   teacherId         String?
   originalTeacherId String?
-  /// Plan 1.11: the learning platform's sector exam this lesson holds (classType exam).
-  sectorExamId      String?             @unique
   roomId            String?
   title             String
   date              DateTime
@@ -620,7 +635,9 @@ model Class {
   reviewedBy        Student? @relation("ClassReviewedBy", fields: [reviewedById], references: [id])
 
   attendees           ClassAttendee[]
-  practiceGroups      Group[]         @relation("PracticeGroups")
+  /// Plan 1.11: the sector exams held in this exam lesson, one per student.
+  sectorExams         ClassSectorExam[]
+  practiceGroups      Group[]           @relation("PracticeGroups")
   practiceClassGroups PracticeGroup[]
 
   payments               Payment[]

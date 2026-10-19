@@ -863,6 +863,11 @@ async function getClassStudents(crmClassId) {
             individualStudent: {
                 select: studentContactSelect,
             },
+            // Plan 1.11: an exam lesson lists the students whose exams it holds.
+            sectorExams: {
+                orderBy: { createdAt: 'asc' },
+                include: { student: { select: studentContactSelect } },
+            },
         },
     });
 
@@ -893,7 +898,21 @@ async function getClassStudents(crmClassId) {
     let roster = [];
     let previousGroupHomework = null;
 
-    if (cls.individualStudent) {
+    if (cls.classType === 'exam' && cls.sectorExams?.length) {
+        roster = cls.sectorExams.map((row) => {
+            const att = attendeeByStudent.get(row.student.id);
+            return {
+                ...mapStudentRef(row.student),
+                homeworkRecipient: resolveStudentNotificationContact(row.student, 'homework'),
+                sectorExamId: row.sectorExamId,
+                attended: att?.attended ?? null,
+                attendanceStatus: att?.attendanceStatus ?? 'unmarked',
+                teacherNote: att?.teacherNote ?? null,
+                homeworkReview: mapOfflineHomeworkReview(att),
+                markedAt: att?.markedAt ?? null,
+            };
+        });
+    } else if (cls.individualStudent) {
         const att = attendeeByStudent.get(cls.individualStudent.id);
         roster.push({
             ...mapStudentRef(cls.individualStudent),

@@ -13,6 +13,8 @@ function getTeacherRate(teacher, classItem) {
     if (classItem.isPractice || classItem.classType === 'practice') return teacher.salaryOther || 0;
     if (classItem.classType === 'individual') return teacher.salaryIndividual || 0;
     if (classItem.classType === 'group') return teacher.salaryGroup || 0;
+    // Экзамен сектора оплачивается как групповой урок: одна ставка за урок, сколько бы учеников ни сдавало.
+    if (classItem.classType === 'exam') return teacher.salaryGroup || 0;
     return teacher.salaryOther || 0;
 }
 
@@ -21,6 +23,7 @@ function getRateLabel(classItem) {
     if (classItem.isPractice || classItem.classType === 'practice') return 'Другие';
     if (classItem.classType === 'individual') return 'Индивидуально';
     if (classItem.classType === 'group') return 'Группа';
+    if (classItem.classType === 'exam') return 'Группа (экзамен)';
     return 'Другие';
 }
 

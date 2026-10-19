@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro89">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro90">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -2578,29 +2578,33 @@
             <h2 class="modal-title" id="sectorExamModalTitle">НАЗНАЧИТЬ ЭКЗАМЕН</h2>
             <p class="sector-exam-modal-note">Бесплатный дополнительный урок. Список проверки подготовлен в платформе обучения; ученик, родитель и преподаватель получат уведомление.</p>
             <form class="admin-form" id="sectorExamForm" onsubmit="submitSectorExamSchedule(event)">
-                <div class="form-group">
-                    <label for="sectorExamSelect">ЭКЗАМЕН</label>
-                    <select class="admin-input" id="sectorExamSelect" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="sectorExamTeacher">ПРЕПОДАВАТЕЛЬ</label>
-                    <select class="admin-input" id="sectorExamTeacher" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="sectorExamRoom">КАБИНЕТ</label>
-                    <select class="admin-input" id="sectorExamRoom" required></select>
-                </div>
-                <div class="form-group">
-                    <label for="sectorExamDate">ДАТА</label>
-                    <input type="date" class="admin-input" id="sectorExamDate" required>
-                </div>
-                <div class="form-group sector-exam-times">
-                    <label>ВРЕМЯ
-                        <span class="sector-exam-time-row">
-                            <input type="time" class="admin-input" id="sectorExamStart" aria-label="Начало" required>
-                            <input type="time" class="admin-input" id="sectorExamEnd" aria-label="Окончание" required>
-                        </span>
-                    </label>
+                <fieldset class="form-group sector-exam-choice">
+                    <legend>ЭКЗАМЕНЫ</legend>
+                    <p class="sector-exam-choice__hint">Можно отметить нескольких учеников: экзамен пройдёт одним уроком, преподаватель получит оплату как за один урок.</p>
+                    <div id="sectorExamChoices" class="sector-exam-choice__list"></div>
+                </fieldset>
+                <p id="sectorExamTarget" class="sector-exam-target" hidden></p>
+                <div id="sectorExamSlotFields">
+                    <div class="form-group">
+                        <label for="sectorExamTeacher">ПРЕПОДАВАТЕЛЬ</label>
+                        <select class="admin-input" id="sectorExamTeacher"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sectorExamRoom">КАБИНЕТ</label>
+                        <select class="admin-input" id="sectorExamRoom"></select>
+                    </div>
+                    <div class="form-group">
+                        <label for="sectorExamDate">ДАТА</label>
+                        <input type="date" class="admin-input" id="sectorExamDate">
+                    </div>
+                    <div class="form-group sector-exam-times">
+                        <label>ВРЕМЯ
+                            <span class="sector-exam-time-row">
+                                <input type="time" class="admin-input" id="sectorExamStart" aria-label="Начало">
+                                <input type="time" class="admin-input" id="sectorExamEnd" aria-label="Окончание">
+                            </span>
+                        </label>
+                    </div>
                 </div>
                 <p id="sectorExamError" class="sector-exam-error" role="alert" hidden></p>
                 <button type="submit" class="modal-submit" id="sectorExamSubmit">НАЗНАЧИТЬ ЭКЗАМЕН</button>
@@ -3436,9 +3440,9 @@
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=140"></script>
     <script src="/js/modules/memberships/rate-cards.js?v=2"></script>
-    <script src="/js/modules/schedule/schedule.js?v=180"></script>
+    <script src="/js/modules/schedule/schedule.js?v=183"></script>
     <script src="/js/modules/lesson-review/lesson-review.js?v=5"></script>
-    <script src="/js/modules/schedule/sector-exams.js?v=2"></script>
+    <script src="/js/modules/schedule/sector-exams.js?v=3"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=19"></script>
     <script src="/js/modules/shop/shop.js?v=4"></script>
 

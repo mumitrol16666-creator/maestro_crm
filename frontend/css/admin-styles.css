@@ -16073,3 +16073,15 @@ html[data-theme="light"] .sidebar-toggle {
 .sector-exam-time-row { display: flex; gap: 10px; margin-top: 6px; }
 .sector-exam-time-row .admin-input { flex: 1; min-width: 0; }
 .sector-exam-error { color: #ef4444; font-weight: 600; margin: 0 0 10px; }
+.sector-exam-choice { border: 0; padding: 0; margin: 0 0 14px; }
+.sector-exam-choice legend { font-weight: 700; margin-bottom: 6px; }
+.sector-exam-choice__hint { margin: 0 0 8px; opacity: 0.7; font-size: 0.88em; line-height: 1.4; }
+.sector-exam-choice__list { display: grid; gap: 6px; max-height: 220px; overflow-y: auto; }
+.sector-exam-choice__item {
+    display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid rgba(148, 163, 184, 0.3); cursor: pointer; min-height: 44px;
+}
+.sector-exam-choice__item input { margin-top: 3px; width: 18px; height: 18px; flex-shrink: 0; }
+.sector-exam-choice__item small { display: block; opacity: 0.7; }
+.sector-exam-target { margin: 0 0 14px; padding: 10px 12px; border-radius: 10px; background: rgba(37, 99, 235, 0.08); font-weight: 600; }
+.sector-exam-target[hidden] { display: none; }

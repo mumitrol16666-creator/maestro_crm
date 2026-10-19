@@ -1395,6 +1395,7 @@ function renderScheduleDetails(classData) {
         <div class="schedule-detail-actions">
             <button type="button" class="schedule-action is-primary" data-schedule-action="open">Открыть урок</button>
             ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" data-schedule-action="conduct">Провести</button>' : ''}
+            ${classData.classType === 'exam' && classData.status === 'scheduled' ? '<button type="button" class="schedule-action" data-schedule-action="add-exam">Добавить экзамен</button>' : ''}
             ${canCancel ? '<button type="button" class="schedule-action is-danger" data-schedule-action="cancel">Отменить</button>' : ''}
             ${classData.needsConfirmation ? '<button type="button" class="schedule-action is-warning" data-schedule-action="confirmation">К подтверждению</button>' : ''}
         </div>
@@ -1413,6 +1414,10 @@ function renderScheduleDetails(classData) {
             if (action === 'open') return openSelectedScheduleLesson(classData);
             if (action === 'conduct') return conductSelectedScheduleLesson(classData);
             if (action === 'cancel') return cancelSelectedScheduleLesson(classData);
+            if (action === 'add-exam' && typeof openSectorExamModal === 'function') {
+                closeScheduleDetails();
+                return openSectorExamModal({ lesson: classData });
+            }
         });
     });
     popover.classList.add('is-open');
@@ -1992,9 +1997,11 @@ function buildAttendanceMembershipInfo(student) {
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg> Баланс: ${formatScheduleAmount(balance)}
     </span>`;
 
+    // Урок экзамена сектора (1.11) бесплатный: списаний по нему нет.
+    const freeExamLesson = currentClassForAttendance?.classType === 'exam';
     membershipInfo += `<span style="color: #cbd5e1; font-size: 0.85em; background: rgba(148, 163, 184, 0.1); padding: 2px 6px; border-radius: 4px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid rgba(148, 163, 184, 0.2);">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
-        Сумму списания выберите ниже
+        ${freeExamLesson ? 'Экзамен бесплатный — без списания' : 'Сумму списания выберите ниже'}
     </span>`;
 
     return membershipInfo;
@@ -2488,7 +2495,8 @@ async function openAttendanceModal(classData) {
         }
 
         // Для специальных занятий без аудитории посещаемость не заполняется.
-        if (!classData.groupId) {
+        // Урок экзамена (1.11) — исключение: его ученики берутся из назначенных экзаменов.
+        if (!classData.groupId && classData.classType !== 'exam') {
             await loadTeachersForAttendance(classData.teacherId);
             document.getElementById('attendanceList').innerHTML = `
                 <p style="text-align: center; opacity: 0.5; padding: 20px;">
@@ -2517,8 +2525,10 @@ async function openAttendanceModal(classData) {
                     return null;
                 })
                 : null,
-            // Загружаем студентов группы
-            fetch(`${API_URL}/groups/${classData.groupId}/students`, {
+            // Загружаем студентов группы (у урока экзамена — учеников его экзаменов)
+            fetch(classData.classType === 'exam'
+                ? `${API_URL}/sector-exams/classes/${classData.id || classData._id}/students`
+                : `${API_URL}/groups/${classData.groupId}/students`, {
                 headers: { 'Authorization': `Bearer ${getAuthToken()}` }
             }).then(async r => {
                 // Студенты группы загружены
@@ -2661,7 +2671,7 @@ async function openAttendanceModal(classData) {
                             <select class="admin-input attendance-absence-select"
                                     onchange="updateAbsenceStatus('${escapeHtml(studentId)}', this.value)" ${attendanceDisabledAttr}>
                                 <option value="excused_absence" ${absenceStatus === 'excused_absence' ? 'selected' : ''}>Уважительная — без списания</option>
-                                <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>Прогул — списать занятие</option>
+                                <option value="unexcused_absence" ${absenceStatus === 'unexcused_absence' ? 'selected' : ''}>${classData.classType === 'exam' ? 'Прогул — без списания (экзамен)' : 'Прогул — списать занятие'}</option>
                                 <option value="emergency_freeze" ${absenceStatus === 'emergency_freeze' ? 'selected' : ''}>🛡️ Экстренная отмена — сохранить урок</option>
                             </select>
                         </div>
@@ -4960,6 +4970,7 @@ function formatClassStatus(status) {
 }
 
 function isPersonalAttendanceLesson(classData) {
+    // Урок экзамена может собрать нескольких учеников: его список строится отдельно.
     return !classData?.groupId && ['individual', 'trial'].includes(classData?.classType);
 }
 

@@ -10,7 +10,16 @@ function uniqueStudentIds(values) {
 async function loadLessonRosterState(db, classRecord) {
     let expectedStudentIds = [];
 
-    if (classRecord.individualStudentId) {
+    if (classRecord.classType === 'exam') {
+        // Plan 1.11: an exam lesson holds the students whose sector exams were booked into it.
+        const exams = await db.classSectorExam.findMany({
+            where: { classId: classRecord.id },
+            select: { studentId: true },
+        });
+        expectedStudentIds = exams.length
+            ? exams.map((exam) => exam.studentId)
+            : [classRecord.individualStudentId].filter(Boolean);
+    } else if (classRecord.individualStudentId) {
         expectedStudentIds = [classRecord.individualStudentId];
     } else if (classRecord.groupId) {
         const memberships = await db.studentGroup.findMany({

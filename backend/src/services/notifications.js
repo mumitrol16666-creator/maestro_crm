@@ -26,17 +26,18 @@ function escapeHtml(value) {
     return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-function formatSectorExamScheduledMessage(classRecord, exam) {
+function formatSectorExamScheduledMessage(classRecord, exams = [], added = false) {
     if (!classRecord) return null;
     const date = classRecord.date instanceof Date
         ? classRecord.date.toISOString().slice(0, 10)
         : String(classRecord.date || '').slice(0, 10);
     const [year, month, day] = date.split('-');
     return [
-        '🎓 <b>Назначен экзамен сектора</b>',
-        `${escapeHtml(exam?.studentName || 'Ученик')} · ${escapeHtml(classRecord.title)}`,
+        added ? '🎓 <b>Экзамен добавлен в урок</b>' : '🎓 <b>Назначен экзамен сектора</b>',
+        escapeHtml(classRecord.title),
         `${day}.${month}.${year}, ${classRecord.startTime}–${classRecord.endTime}`,
-        'Бесплатный урок. Ученику, родителю и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
+        ...exams.map(exam => `• ${escapeHtml(exam.studentName || 'Ученик')} — ${escapeHtml(exam.title || '')}`),
+        'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
     ].join('\n');
 }
 
@@ -62,7 +63,7 @@ async function notify(eventType, payload = {}) {
                 message = formatEveningReportMessage(payload.stats);
                 break;
             case 'sector_exam.scheduled':
-                message = formatSectorExamScheduledMessage(payload.classRecord, payload.exam);
+                message = formatSectorExamScheduledMessage(payload.classRecord, payload.exams, payload.added);
                 break;
             default:
                 console.warn(`[notify] Unknown event: ${eventType}`);

@@ -27,6 +27,7 @@ if (!process.env.TEST_DATABASE_URL) {
     let admin;
     let teacher;
     let student;
+    let classmate;
     let room;
 
     const digits = (pad) => suffix.replace(/\D/g, '').padEnd(7, pad).slice(0, 7);
@@ -90,6 +91,11 @@ if (!process.env.TEST_DATABASE_URL) {
             accountBalance: 10000,
             additionalPhones: { create: [{ phone: `+7702${digits('2')}`, phoneDigits: `7702${digits('2')}`, label: 'Папа Руслан' }] },
         } });
+        classmate = await prisma.student.create({ data: {
+            name: 'Алия', lastName: `Exam-${suffix}`, customerName: 'Алия', phone: `+7703${digits('3')}`,
+            password: 'local-test-only', role: 'student', status: 'active', learningDirections: ['Гитара'], teacherDirections: [],
+            accountBalance: 5000,
+        } });
         room = await prisma.room.create({ data: { name: `Exam room ${suffix}` } });
         await new Promise(resolve => app.httpServer.listen(0, '127.0.0.1', resolve));
         baseUrl = `http://127.0.0.1:${app.httpServer.address().port}/api`;
@@ -118,9 +124,11 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(booked.status, 201, JSON.stringify(booked.body));
         const lesson = await prisma.class.findUnique({ where: { id: booked.body.class.id } });
         assert.equal(lesson.classType, 'exam');
-        assert.equal(lesson.sectorExamId, exam.examId);
-        assert.equal(lesson.individualStudentId, student.id);
         assert.equal(lesson.price, 0);
+        assert.deepEqual(
+            (await prisma.classSectorExam.findMany({ where: { classId: lesson.id } })).map(row => [row.sectorExamId, row.studentId]),
+            [[exam.examId, student.id]],
+        );
         assert.deepEqual(platform.scheduled.at(-1), {
             examId: exam.examId, crmClassId: lesson.id, lessonAt: `${day(0)}T07:00:00.000Z`, crmTeacherId: teacher.id,
         });
@@ -130,7 +138,7 @@ if (!process.env.TEST_DATABASE_URL) {
         const again = await request(`/sector-exams/${exam.examId}/schedule`, { method: 'POST', body: { ...slot, startTime: '15:00', endTime: '16:00' } });
         assert.equal(again.status, 200);
         assert.equal(again.body.alreadyBooked, true);
-        assert.equal(await prisma.class.count({ where: { sectorExamId: exam.examId } }), 1);
+        assert.equal(await prisma.classSectorExam.count({ where: { sectorExamId: exam.examId } }), 1);
         const filtered = await request('/sector-exams/pending');
         assert.equal(filtered.body.exams.length, 0, 'a booked exam leaves the queue even before the platform catches up');
     });
@@ -200,5 +208,66 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(sent.status, 200, JSON.stringify(sent.body));
         const after = await request('/admin/whatsapp-reminders');
         assert.equal(after.body.exam.filter(item => item.classId === booked.body.class.id).length, 1);
+    });
+
+    test('several students sit one exam lesson; more can join it; the teacher is paid once', async () => {
+        const first = pendingExam();
+        const second = pendingExam({ crmStudentId: classmate.id, examId: randomUUID() });
+        platform.pending = [first, second];
+        const booked = await request('/sector-exams/book', { method: 'POST', body: {
+            examIds: [first.examId, second.examId], date: day(5), startTime: '11:00', endTime: '12:00', teacherId: teacher.id, roomId: room.id,
+        } });
+        assert.equal(booked.status, 201, JSON.stringify(booked.body));
+        assert.equal(booked.body.booked, 2);
+        const classId = booked.body.class.id;
+        const lesson = await prisma.class.findUnique({ where: { id: classId } });
+        assert.equal(lesson.title, 'Экзамен секторов · Гитара · 2 ученика');
+        assert.equal(lesson.individualStudentId, null);
+        assert.deepEqual(platform.scheduled.slice(-2).map(item => [item.examId, item.crmClassId]).sort(), [[first.examId, classId], [second.examId, classId]].sort());
+
+        const { getClassStudents } = require('../src/services/integrationRead');
+        const roster = await getClassStudents(classId);
+        assert.deepEqual(roster.data.students.map(item => item.crmStudentId).sort(), [student.id, classmate.id].sort());
+        const attendanceList = await request(`/sector-exams/classes/${classId}/students`);
+        assert.equal(attendanceList.body.students.length, 2);
+
+        // A third student joins the booked lesson at its time, teacher and room.
+        const third = await prisma.student.create({ data: {
+            name: 'Ерлан', lastName: `Exam-${suffix}`, phone: `+7704${digits('4')}`, password: 'local-test-only',
+            role: 'student', status: 'active', learningDirections: ['Гитара'], teacherDirections: [],
+        } });
+        const late = pendingExam({ crmStudentId: third.id, examId: randomUUID() });
+        platform.pending = [late];
+        const joined = await request('/sector-exams/book', { method: 'POST', body: { examIds: [late.examId], classId } });
+        assert.equal(joined.status, 201, JSON.stringify(joined.body));
+        assert.equal(joined.body.addedToExisting, true);
+        assert.equal(joined.body.class.title, 'Экзамен секторов · Гитара · 3 ученика');
+        assert.equal(await prisma.class.count({ where: { classType: 'exam', date: new Date(`${day(5)}T00:00:00.000Z`), teacherId: teacher.id } }), 1);
+
+        // A student already in this exam lesson cannot be booked into another one at the same time.
+        const clash = pendingExam({ crmStudentId: third.id, examId: randomUUID() });
+        platform.pending = [clash];
+        const otherTeacher = await prisma.student.create({ data: {
+            name: 'Exam QA', lastName: `teacher2-${suffix}`, phone: `qa-exam-teacher2-${suffix}`, password: 'local-test-only',
+            role: 'teacher', learningDirections: [], teacherDirections: ['Гитара'],
+        } });
+        const otherRoom = await prisma.room.create({ data: { name: `Exam room 2 ${suffix}` } });
+        const busy = await request('/sector-exams/book', { method: 'POST', body: {
+            examIds: [clash.examId], date: day(5), startTime: '11:30', endTime: '12:30', teacherId: otherTeacher.id, roomId: otherRoom.id,
+        } });
+        assert.equal(busy.status, 409);
+        assert.match(busy.body.error, /^Exam-.+ Ерлан: Время занято/);
+
+        // Approval: attendance for everyone, no charge, one lesson for the teacher's pay.
+        const approved = await request(`/classes/${classId}/approve`, { method: 'POST', body: {
+            topic: 'Экзамен секторов', lessonSummary: 'Трое сдавали экзамен',
+            billingDecisions: [student.id, classmate.id, third.id].map(id => ({ studentId: id, attendanceStatus: 'present' })),
+        } });
+        assert.equal(approved.status, 200, JSON.stringify(approved.body));
+        const attendees = await prisma.classAttendee.findMany({ where: { classId } });
+        assert.equal(attendees.length, 3);
+        assert.ok(attendees.every(row => !row.chargeAmount));
+        const { getTeacherRate } = require('../src/services/salaryPolicy');
+        assert.equal(getTeacherRate({ salaryGroup: 3000, salaryIndividual: 5000, salaryOther: 1000 }, lesson), 3000);
     });
 }

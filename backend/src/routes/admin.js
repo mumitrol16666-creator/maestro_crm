@@ -1050,7 +1050,13 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     status: 'scheduled',
                     date: { gte: todayStart, lt: examWindowEnd },
                 },
-                include: lessonInclude,
+                include: {
+                    ...lessonInclude,
+                    sectorExams: {
+                        orderBy: { createdAt: 'asc' },
+                        include: { student: { select: lessonInclude.individualStudent.select } },
+                    },
+                },
                 orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
             }),
         ]);
@@ -1101,9 +1107,10 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             .filter((item) => item.topic || item.homework || item.summary);
 
         const exam = examClasses.flatMap((classRecord) => {
-            const student = classRecord.individualStudent;
-            if (!student) return [];
-            return resolveStudentExamContacts(student).map((recipient) => ({
+            const examStudents = classRecord.sectorExams?.length
+                ? classRecord.sectorExams.map((row) => row.student)
+                : [classRecord.individualStudent].filter(Boolean);
+            return examStudents.flatMap((student) => resolveStudentExamContacts(student).map((recipient) => ({
                 id: `exam:${classRecord.id}:${student.id}:${String(recipient.phone).replace(/\D/g, '').slice(-10)}`,
                 classId: classRecord.id,
                 studentId: student.id,
@@ -1127,7 +1134,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                     roomName: classRecord.room?.name || null,
                 }),
                 messageSource: 'template',
-            }));
+            })));
         });
 
         const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks, ...homework, ...exam];

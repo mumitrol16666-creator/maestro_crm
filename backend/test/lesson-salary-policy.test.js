@@ -160,3 +160,11 @@ test('групповой урок оплачивается, если друго�
     };
     assert.equal(isPayableClass(lesson), true);
 });
+
+test('a sector exam lesson pays the group rate once, however many students sit it', () => {
+    const { getTeacherRate, getRateLabel } = require('../src/services/salaryPolicy');
+    const teacher = { salaryGroup: 3000, salaryIndividual: 5000, salaryOther: 1000 };
+    const exam = { classType: 'exam', attendees: [{ attendanceStatus: 'present' }, { attendanceStatus: 'present' }, { attendanceStatus: 'present' }] };
+    assert.equal(getTeacherRate(teacher, exam), 3000);
+    assert.equal(getRateLabel(exam), 'Группа (экзамен)');
+});

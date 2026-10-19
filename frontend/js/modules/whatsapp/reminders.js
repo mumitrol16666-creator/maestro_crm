@@ -187,6 +187,13 @@ function whatsappReminderMeta(kind, item) {
             item.roomName ? `Кабинет: ${item.roomName}` : null,
         ].filter(Boolean).join(' · ');
     }
+    if (kind === 'exam') {
+        const date = item.date
+            ? new Date(item.date).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' })
+            : null;
+        return [date && item.startTime ? `${date}, ${item.startTime}` : date, item.subject, item.roomName ? `Кабинет: ${item.roomName}` : null]
+            .filter(Boolean).join(' · ');
+    }
     if (kind === 'oneLesson') {
         return [item.subject, 'Низкий баланс', `Баланс: ${new Intl.NumberFormat('ru-RU').format(item.accountBalance || 0)} ₸`].filter(Boolean).join(' · ');
     }
@@ -215,7 +222,9 @@ function whatsappReminderCard(kind, item) {
         ? 'Нужен получатель'
         : kind === 'homework'
             ? 'Шаблон итогов урока'
-            : 'Готовый черновик';
+            : kind === 'exam'
+                ? 'Приглашение на экзамен'
+                : 'Готовый черновик';
     const isPayment = kind === 'oneLesson' || kind === 'tasks';
     const messageField = `
         <div class="whatsapp-message-meta">
@@ -270,6 +279,7 @@ function renderWhatsappReminderContent() {
         homework: 'После урока',
         oneLesson: 'Низкий баланс',
         tasks: 'Запланированные контакты',
+        exam: 'Экзамены',
     };
     const items = whatsappReminderData[whatsappReminderFilter] || [];
     root.innerHTML = `

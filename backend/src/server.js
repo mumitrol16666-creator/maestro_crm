@@ -217,6 +217,7 @@ app.use('/api/directions', require('./routes/directions'));
 app.use('/api/rooms', require('./routes/rooms'));
 app.use('/api/permissions', require('./routes/permissions'));
 app.use('/api/classes', require('./routes/classes'));
+app.use('/api/sector-exams', require('./routes/sectorExams'));
 app.use('/api/memberships', require('./routes/memberships'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/cashbox', require('./routes/cashbox'));

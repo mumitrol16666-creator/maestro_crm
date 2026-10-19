@@ -15,6 +15,7 @@ const {
     useEmergencyFreezeForClass
 } = require('../services/classMembership');
 const { notify } = require('../services/notifications');
+const { isSectorExamClass } = require('../services/sectorExams');
 const { syncOfflineLessonEventToLearningPlatform } = require('../services/learningPlatformNotifications');
 const { returnClassToTeacher, reopenClass, upsertClassAttendee } = require('../services/lessonLifecycle');
 const { ensureTeacherScheduleColors } = require('../services/scheduleAppearance');
@@ -2756,8 +2757,10 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 
                     // Диагностика оплачивается отдельной кассовой операцией.
                     // Посещаемость пробного сохраняем, но баланс и абонемент не меняем.
-                    const shouldCharge = !isTrial && shouldChargeAttendance(status);
-                    const shouldUseFreeze = !isTrial && isEmergencyFreezeAttendance(status);
+                    // Экзамен сектора (1.11) — бесплатный дополнительный урок: тоже без списаний.
+                    const isFreeLesson = isTrial || isSectorExamClass(classRecord);
+                    const shouldCharge = !isFreeLesson && shouldChargeAttendance(status);
+                    const shouldUseFreeze = !isFreeLesson && isEmergencyFreezeAttendance(status);
                     if (shouldUseFreeze) {
                         const membershipId = decision.membershipId || null;
                         const freezeResult = await useEmergencyFreezeForClass(
@@ -3295,8 +3298,9 @@ router.get('/:id/billing-options', authenticate, requireAdmin, async (req, res) 
                 suggestedAmount: suggestedMembership?.lessonPrice ?? (groupSelection ? 0 : fallbackPrice),
                 selectionState: groupSelection?.state || 'automatic',
                 selectionMessage: groupSelection?.message || '',
-                requiresMembershipSelection: true,
-                billingType: getLessonBillingType(classRecord),
+                // A sector exam is a free lesson: attendance only, nothing to charge.
+                requiresMembershipSelection: !isSectorExamClass(classRecord),
+                billingType: isSectorExamClass(classRecord) ? null : getLessonBillingType(classRecord),
             };
         });
 

@@ -22,6 +22,24 @@ const {
     isShopCashCategory,
 } = require('./cashTransactionCategories');
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function formatSectorExamScheduledMessage(classRecord, exam) {
+    if (!classRecord) return null;
+    const date = classRecord.date instanceof Date
+        ? classRecord.date.toISOString().slice(0, 10)
+        : String(classRecord.date || '').slice(0, 10);
+    const [year, month, day] = date.split('-');
+    return [
+        '🎓 <b>Назначен экзамен сектора</b>',
+        `${escapeHtml(exam?.studentName || 'Ученик')} · ${escapeHtml(classRecord.title)}`,
+        `${day}.${month}.${year}, ${classRecord.startTime}–${classRecord.endTime}`,
+        'Бесплатный урок. Ученику, родителю и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
+    ].join('\n');
+}
+
 /**
  * Нейтральный слой уведомлений. Telegram — один из каналов.
  * Не бросает исключения — сбой уведомления не ломает бизнес-операцию.
@@ -42,6 +60,9 @@ async function notify(eventType, payload = {}) {
                 break;
             case 'report.evening':
                 message = formatEveningReportMessage(payload.stats);
+                break;
+            case 'sector_exam.scheduled':
+                message = formatSectorExamScheduledMessage(payload.classRecord, payload.exam);
                 break;
             default:
                 console.warn(`[notify] Unknown event: ${eventType}`);

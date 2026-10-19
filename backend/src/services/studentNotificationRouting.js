@@ -89,6 +89,23 @@ function resolveStudentNotificationContact(student, kind) {
     return isConfigured ? null : contacts.find(contact => contact.phone) || null;
 }
 
+/**
+ * Plan 1.11: an exam invitation goes to the student and to a parent, each once.
+ * Falls back to the lesson-reminder contact when neither is recognisable.
+ */
+function resolveStudentExamContacts(student) {
+    const contacts = studentNotificationContacts(student).filter(contact => contact.phone);
+    const digits = phone => String(phone).replace(/\D/g, '').slice(-10);
+    const picked = [];
+    const add = contact => {
+        if (contact && !picked.some(item => digits(item.phone) === digits(contact.phone))) picked.push(contact);
+    };
+    add(contacts.find(contact => contact.audience === 'student'));
+    add(contacts.find(contact => contact.audience === 'parent'));
+    if (!picked.length) add(resolveStudentNotificationContact(student, 'lessons'));
+    return picked;
+}
+
 function resolveStudentNotificationPhone(student, kind) {
     return resolveStudentNotificationContact(student, kind)?.phone || null;
 }
@@ -116,4 +133,5 @@ module.exports = {
     assertUniqueNotificationRoutes,
     resolveStudentNotificationContact,
     resolveStudentNotificationPhone,
+    resolveStudentExamContacts,
 };

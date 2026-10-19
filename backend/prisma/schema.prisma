@@ -45,6 +45,8 @@ enum ClassType {
   trial
   rent
   theory
+  /// Plan 1.11: the free sector exam booked from the learning platform's queue.
+  exam
 }
 
 enum ClassDeliveryFormat {
@@ -153,40 +155,40 @@ enum StaffTaskPriority {
 // =======================
 
 model Student {
-  id                          String       @id @default(cuid())
-  name                        String
-  lastName                    String
-  middleName                  String?
-  dateOfBirth                 DateTime?
-  phone                       String
-  phoneDigits                 String?
-  notifyHomework              Boolean?
-  notifyLessons               Boolean?
-  notifyPayments              Boolean?
-  email                       String?      @unique
-  password                    String
-  sessionVersion              Int          @default(0)
-  gender                      Gender?
-  role                        Role         @default(student)
-  status                      EntityStatus @default(active)
-  pausedUntil                 DateTime?
+  id                                 String                @id @default(cuid())
+  name                               String
+  lastName                           String
+  middleName                         String?
+  dateOfBirth                        DateTime?
+  phone                              String
+  phoneDigits                        String?
+  notifyHomework                     Boolean?
+  notifyLessons                      Boolean?
+  notifyPayments                     Boolean?
+  email                              String?               @unique
+  password                           String
+  sessionVersion                     Int                   @default(0)
+  gender                             Gender?
+  role                               Role                  @default(student)
+  status                             EntityStatus          @default(active)
+  pausedUntil                        DateTime?
   individualScheduleGeneratedThrough DateTime?
-  notes                       String?      @db.Text
-  oldCrmId                    String?      @unique
-  customerName                String?
-  customerType                String?
-  acquisitionSource           String?
-  learningDirections          String[]
-  learningLevel               String?
-  registeredAt                DateTime     @default(now())
-  offerAccepted               Boolean      @default(false)
-  offerAcceptedAt             DateTime?
-  accountBalance              Int          @default(0) // Свободный баланс ученика; отрицательное значение = долг
-  accountBalanceInitializedAt DateTime?
-  enrollments                 Enrollment[]
-  balanceEntries              StudentBalanceEntry[]
-  penaltyPoints               Int          @default(0)
-  studentAvatar               String?
+  notes                              String?               @db.Text
+  oldCrmId                           String?               @unique
+  customerName                       String?
+  customerType                       String?
+  acquisitionSource                  String?
+  learningDirections                 String[]
+  learningLevel                      String?
+  registeredAt                       DateTime              @default(now())
+  offerAccepted                      Boolean               @default(false)
+  offerAcceptedAt                    DateTime?
+  accountBalance                     Int                   @default(0) // Свободный баланс ученика; отрицательное значение = долг
+  accountBalanceInitializedAt        DateTime?
+  enrollments                        Enrollment[]
+  balanceEntries                     StudentBalanceEntry[]
+  penaltyPoints                      Int                   @default(0)
+  studentAvatar                      String?
 
   // Integration: Learning Platform user link
   appUserId          String?   @unique
@@ -355,7 +357,7 @@ model StudentRecovery {
 
 model Group {
   id              String     @id @default(cuid())
-  billingType     String?    // quartet | duo | trio | theory; null requires classification
+  billingType     String? // quartet | duo | trio | theory; null requires classification
   name            String
   direction       String
   level           GroupLevel @default(beginner)
@@ -478,7 +480,7 @@ model DirectionPlan {
   individualClasses Int?
   groupClasses      Int?
   theoryClasses     Int?
-  emergencyFreezes Int     @default(0)
+  emergencyFreezes  Int     @default(0)
   order             Int     @default(0) // Порядок отображения
   isActive          Boolean @default(true)
 
@@ -543,19 +545,21 @@ model MembershipPlan {
 }
 
 model Class {
-  id                String      @id @default(cuid())
+  id                String              @id @default(cuid())
   groupId           String?
   teacherId         String?
   originalTeacherId String?
+  /// Plan 1.11: the learning platform's sector exam this lesson holds (classType exam).
+  sectorExamId      String?             @unique
   roomId            String?
   title             String
   date              DateTime
   startTime         String
   endTime           String
-  duration          Int         @default(90)
-  status            ClassStatus @default(scheduled)
+  duration          Int                 @default(90)
+  status            ClassStatus         @default(scheduled)
   deliveryFormat    ClassDeliveryFormat @default(offline)
-  meetingUrl        String?     @db.VarChar(1024)
+  meetingUrl        String?             @db.VarChar(1024)
 
   isRecurring      Boolean   @default(false)
   recurringFreq    String    @default("none")
@@ -645,22 +649,22 @@ model PracticeGroup {
 }
 
 model ClassAttendee {
-  id                  String    @id @default(cuid())
-  classId             String
-  studentId           String?
-  attended            Boolean   @default(false)
-  attendanceStatus    String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
-  teacherNote         String?   @db.Text
-  homeworkStatus      String?   @db.VarChar(32)
-  homeworkCompletionPercent Int?
-  homeworkDifficulties String?  @db.Text
-  homeworkNotCompletedReason String? @db.Text
-  reviewedHomeworkClassId String?
-  markedAt            DateTime?
-  autoDeducted        Boolean   @default(false)
-  chargeAmount        Int       @default(0)
-  chargedMembershipId String?
-  chargeSource        String? // membership | balance_only
+  id                         String    @id @default(cuid())
+  classId                    String
+  studentId                  String?
+  attended                   Boolean   @default(false)
+  attendanceStatus           String    @default("unmarked") // unmarked | present | late | excused_absence | unexcused_absence
+  teacherNote                String?   @db.Text
+  homeworkStatus             String?   @db.VarChar(32)
+  homeworkCompletionPercent  Int?
+  homeworkDifficulties       String?   @db.Text
+  homeworkNotCompletedReason String?   @db.Text
+  reviewedHomeworkClassId    String?
+  markedAt                   DateTime?
+  autoDeducted               Boolean   @default(false)
+  chargeAmount               Int       @default(0)
+  chargedMembershipId        String?
+  chargeSource               String? // membership | balance_only
 
   class   Class    @relation(fields: [classId], references: [id], onDelete: Cascade)
   student Student? @relation(fields: [studentId], references: [id], onDelete: SetNull)
@@ -670,43 +674,43 @@ model ClassAttendee {
 }
 
 model Membership {
-  enrollment       Enrollment?
-  renewalsFrom     SubscriptionRenewal[] @relation("RenewalSource")
-  renewedBy        SubscriptionRenewal? @relation("RenewalResult")
-  installmentIntents InstallmentIntent[]
-  id               String   @id @default(cuid())
-  billingModel     String   @default("legacy")
-  tariffName       String?
-  validFrom        DateTime? @db.Date
-  validUntil       DateTime? @db.Date
-  lessonRates      Json?
-  studentId        String
-  groupId          String?
-  planId           String?
-  directionId      String?
-  lessonPrice      Int      @default(0)
-  individualLessonPrice Int?
-  theoryLessonPrice     Int?
-  groupLessonPrice      Int?
-  programMonths             Int?
-  additionalDiscountType    String?
+  enrollment                    Enrollment?
+  renewalsFrom                  SubscriptionRenewal[] @relation("RenewalSource")
+  renewedBy                     SubscriptionRenewal?  @relation("RenewalResult")
+  installmentIntents            InstallmentIntent[]
+  id                            String                @id @default(cuid())
+  billingModel                  String                @default("legacy")
+  tariffName                    String?
+  validFrom                     DateTime?             @db.Date
+  validUntil                    DateTime?             @db.Date
+  lessonRates                   Json?
+  studentId                     String
+  groupId                       String?
+  planId                        String?
+  directionId                   String?
+  lessonPrice                   Int                   @default(0)
+  individualLessonPrice         Int?
+  theoryLessonPrice             Int?
+  groupLessonPrice              Int?
+  programMonths                 Int?
+  additionalDiscountType        String?
   additionalDiscountBasisPoints Int?
-  additionalDiscountAmount  Int?
-  additionalDiscountReason  String?
-  individualBudgetTotal     Int?
-  individualBudgetRemaining Int?
-  teacherId        String?
-  lessonFormat     String   @default("group") // group | individual | trial
-  type             String
-  totalClasses     Int
-  classesRemaining Int
-  classesUsed      Int      @default(0)
-  startDate        DateTime
-  endDate          DateTime
-  activatedAt      DateTime @default(now())
-  freezesAvailable Int      @default(1)
-  freezesUsed      Int      @default(0)
-  status           String   @default("active") // active, expired, frozen
+  additionalDiscountAmount      Int?
+  additionalDiscountReason      String?
+  individualBudgetTotal         Int?
+  individualBudgetRemaining     Int?
+  teacherId                     String?
+  lessonFormat                  String                @default("group") // group | individual | trial
+  type                          String
+  totalClasses                  Int
+  classesRemaining              Int
+  classesUsed                   Int                   @default(0)
+  startDate                     DateTime
+  endDate                       DateTime
+  activatedAt                   DateTime              @default(now())
+  freezesAvailable              Int                   @default(1)
+  freezesUsed                   Int                   @default(0)
+  status                        String                @default("active") // active, expired, frozen
 
   individualClassesRemaining Int?
   groupClassesRemaining      Int?
@@ -789,31 +793,31 @@ model Payment {
   enrollmentIntent            EnrollmentPaymentIntent?
   renewalPayment              SubscriptionRenewal?
   installmentIntent           InstallmentIntent?
-  id                          String           @id @default(cuid())
+  id                          String                   @id @default(cuid())
   studentId                   String
   studentName                 String?
   studentPhone                String?
   managerId                   String
   managerName                 String?
   amount                      Int
-  paymentDate                 DateTime         @default(now())
+  paymentDate                 DateTime                 @default(now())
   type                        PaymentType
   relatedPaymentId            String?
   membershipId                String?
   bookingId                   String?
   relatedClassId              String?
-  status                      PaymentStatus    @default(completed)
-  commissionStatus            CommissionStatus @default(pending)
-  isFirstMembershipForManager Boolean          @default(false)
+  status                      PaymentStatus            @default(completed)
+  commissionStatus            CommissionStatus         @default(pending)
+  isFirstMembershipForManager Boolean                  @default(false)
   includedInSalaryMonth       String?
   teacherId                   String?
-  notes                       String?          @db.Text
+  notes                       String?                  @db.Text
   dueDate                     DateTime?
   maxClassesBeforePayment     Int?
   paymentMethod               String? // kaspi, cash, kaspi_pay, freedom, halyk
   cancelledAt                 DateTime?
-  cancellationReason          String?  @db.Text
-  isCancellation              Boolean  @default(false)
+  cancellationReason          String?                  @db.Text
+  isCancellation              Boolean                  @default(false)
 
   // Discount snapshot on this payment (for history)
   basePrice                 Int?
@@ -1633,28 +1637,28 @@ model FinancialRequest {
 // Append-only account movements. Database triggers serialize entries and update
 // Student.accountBalance; updating that balance directly is prohibited.
 model StudentBalanceEntry {
-  id             String   @id @default(cuid())
-  studentId      String
-  position       Int      @default(0)
-  amount         Int
-  balanceBefore  Int      @default(0)
-  balanceAfter   Int      @default(0)
-  kind           String
-  sourceType     String
-  sourceId       String
-  actorId        String?
-  reason         String   @db.Text
-  operationKey   String   @unique
-  requestHash    String
-  recordedAt     DateTime @default(now())
-  effectiveAt    DateTime @default(now())
-  needsReview    Boolean  @default(false)
-  metadata       Json?
-  reversalOfId   String?  @unique
+  id            String   @id @default(cuid())
+  studentId     String
+  position      Int      @default(0)
+  amount        Int
+  balanceBefore Int      @default(0)
+  balanceAfter  Int      @default(0)
+  kind          String
+  sourceType    String
+  sourceId      String
+  actorId       String?
+  reason        String   @db.Text
+  operationKey  String   @unique
+  requestHash   String
+  recordedAt    DateTime @default(now())
+  effectiveAt   DateTime @default(now())
+  needsReview   Boolean  @default(false)
+  metadata      Json?
+  reversalOfId  String?  @unique
 
-  student        Student @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  reversalOf     StudentBalanceEntry? @relation("BalanceReversal", fields: [reversalOfId], references: [id], onDelete: Restrict, onUpdate: Restrict)
-  reversal       StudentBalanceEntry? @relation("BalanceReversal")
+  student    Student              @relation(fields: [studentId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversalOf StudentBalanceEntry? @relation("BalanceReversal", fields: [reversalOfId], references: [id], onDelete: Restrict, onUpdate: Restrict)
+  reversal   StudentBalanceEntry? @relation("BalanceReversal")
 
   @@unique([studentId, position])
   @@index([studentId, sourceType, sourceId])
@@ -1662,99 +1666,103 @@ model StudentBalanceEntry {
 
 // First enrollment is resumable across administrators and devices. Renewal is a separate purchase.
 model Enrollment {
-  id                 String   @id @default(cuid())
-  studentId          String   @unique
-  student            Student  @relation(fields: [studentId], references: [id], onDelete: Restrict)
-  responsibleId      String
-  revision           Int      @default(0)
-  customer           Json?
-  terms              Json?
-  membershipId       String?  @unique
-  membership         Membership? @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  activatedAt        DateTime?
-  studentHandedAt    DateTime?
-  parentHandedAt     DateTime?
-  parentUserId       String?
-  lastAccessError    String?
-  completedAt        DateTime?
-  createdAt          DateTime @default(now())
-  updatedAt          DateTime @updatedAt
-  documents          EnrollmentDocument[]
-  paymentIntents     EnrollmentPaymentIntent[]
+  id              String                    @id @default(cuid())
+  studentId       String                    @unique
+  student         Student                   @relation(fields: [studentId], references: [id], onDelete: Restrict)
+  responsibleId   String
+  revision        Int                       @default(0)
+  customer        Json?
+  terms           Json?
+  membershipId    String?                   @unique
+  membership      Membership?               @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  activatedAt     DateTime?
+  studentHandedAt DateTime?
+  parentHandedAt  DateTime?
+  parentUserId    String?
+  lastAccessError String?
+  completedAt     DateTime?
+  createdAt       DateTime                  @default(now())
+  updatedAt       DateTime                  @updatedAt
+  documents       EnrollmentDocument[]
+  paymentIntents  EnrollmentPaymentIntent[]
+
   @@index([completedAt, updatedAt])
 }
 
 model EnrollmentDocument {
-  id                 String   @id @default(cuid())
-  enrollmentId       String
-  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
-  number             Int      @unique @default(autoincrement())
-  revision           Int
-  templateVersion    String
-  snapshot           Json
-  html               String   @db.Text
-  preparedById       String
-  createdAt          DateTime @default(now())
-  printedAt          DateTime?
-  contractSignedAt   DateTime?
-  appendixSignedAt   DateTime?
-  consentSignedAt    DateTime?
-  signedById         String?
-  scans              DocumentScan[]
+  id               String         @id @default(cuid())
+  enrollmentId     String
+  enrollment       Enrollment     @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  number           Int            @unique @default(autoincrement())
+  revision         Int
+  templateVersion  String
+  snapshot         Json
+  html             String         @db.Text
+  preparedById     String
+  createdAt        DateTime       @default(now())
+  printedAt        DateTime?
+  contractSignedAt DateTime?
+  appendixSignedAt DateTime?
+  consentSignedAt  DateTime?
+  signedById       String?
+  scans            DocumentScan[]
+
   @@unique([enrollmentId, revision])
 }
 
 model EnrollmentPaymentIntent {
-  id                 String   @id @default(uuid())
-  enrollmentId       String
-  enrollment         Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
-  payload            Json
-  createdById        String
-  paymentId          String?  @unique
-  payment            Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  cancelledAt        DateTime?
-  createdAt          DateTime @default(now())
-  confirmedAt        DateTime?
+  id           String     @id @default(uuid())
+  enrollmentId String
+  enrollment   Enrollment @relation(fields: [enrollmentId], references: [id], onDelete: Restrict)
+  payload      Json
+  createdById  String
+  paymentId    String?    @unique
+  payment      Payment?   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  cancelledAt  DateTime?
+  createdAt    DateTime   @default(now())
+  confirmedAt  DateTime?
+
   @@index([enrollmentId, createdAt])
 }
 
 // Admin prepares an immutable calculation, then explicitly confirms the purchase.
 model SubscriptionRenewal {
-  id                   String @id @default(uuid())
+  id                   String           @id @default(uuid())
   studentId            String
   previousMembershipId String
-  previousMembership   Membership @relation("RenewalSource", fields: [previousMembershipId], references: [id], onDelete: Restrict)
-  membershipId         String? @unique
-  membership           Membership? @relation("RenewalResult", fields: [membershipId], references: [id], onDelete: Restrict)
-  paymentId            String? @unique
-  payment              Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  previousMembership   Membership       @relation("RenewalSource", fields: [previousMembershipId], references: [id], onDelete: Restrict)
+  membershipId         String?          @unique
+  membership           Membership?      @relation("RenewalResult", fields: [membershipId], references: [id], onDelete: Restrict)
+  paymentId            String?          @unique
+  payment              Payment?         @relation(fields: [paymentId], references: [id], onDelete: Restrict)
   terms                Json
   documentBasis        Json
   creditAmount         Int
-  creditReason         String @db.Text
+  creditReason         String           @db.Text
   paymentPayload       Json
   sourceSnapshot       Json
   sourceHash           String
   createdById          String
   confirmedById        String?
-  createdAt            DateTime @default(now())
+  createdAt            DateTime         @default(now())
   confirmedAt          DateTime?
   cancelledAt          DateTime?
   document             RenewalDocument?
+
   @@index([studentId, createdAt])
 }
 
 // Issued appendix is an immutable copy of one administrator-approved calculation.
 model RenewalDocument {
-  id              String @id @default(uuid())
-  renewalId       String @unique
+  id              String              @id @default(uuid())
+  renewalId       String              @unique
   renewal         SubscriptionRenewal @relation(fields: [renewalId], references: [id], onDelete: Restrict)
-  number          Int @unique @default(autoincrement())
+  number          Int                 @unique @default(autoincrement())
   templateVersion String
   snapshot        Json
-  html            String @db.Text
+  html            String              @db.Text
   preparedById    String
-  createdAt       DateTime @default(now())
+  createdAt       DateTime            @default(now())
   signedAt        DateTime?
   signedById      String?
   scans           DocumentScan[]
@@ -1762,11 +1770,11 @@ model RenewalDocument {
 
 // Private originals: included in PostgreSQL backups; never served from public uploads.
 model DocumentScan {
-  id                   String @id @default(uuid())
+  id                   String              @id @default(uuid())
   enrollmentDocumentId String?
   enrollmentDocument   EnrollmentDocument? @relation(fields: [enrollmentDocumentId], references: [id], onDelete: Restrict)
   renewalDocumentId    String?
-  renewalDocument      RenewalDocument? @relation(fields: [renewalDocumentId], references: [id], onDelete: Restrict)
+  renewalDocument      RenewalDocument?    @relation(fields: [renewalDocumentId], references: [id], onDelete: Restrict)
   kind                 String
   fileName             String
   mimeType             String
@@ -1774,25 +1782,27 @@ model DocumentScan {
   digest               String
   fileData             Bytes
   uploadedById         String
-  createdAt            DateTime @default(now())
-  reviewVersion        Int @default(0)
+  createdAt            DateTime            @default(now())
+  reviewVersion        Int                 @default(0)
   withdrawnAt          DateTime?
   reviewedById         String?
   reviewReason         String?
+
   @@unique([enrollmentDocumentId, kind, digest])
   @@unique([renewalDocumentId, kind, digest])
 }
 
 model InstallmentIntent {
-  id             String @id @default(uuid())
-  membershipId   String
-  membership     Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
-  payload        Json
-  createdById    String
-  paymentId      String? @unique
-  payment        Payment? @relation(fields: [paymentId], references: [id], onDelete: Restrict)
-  createdAt      DateTime @default(now())
-  confirmedAt    DateTime?
-  cancelledAt    DateTime?
+  id           String     @id @default(uuid())
+  membershipId String
+  membership   Membership @relation(fields: [membershipId], references: [id], onDelete: Restrict)
+  payload      Json
+  createdById  String
+  paymentId    String?    @unique
+  payment      Payment?   @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+  createdAt    DateTime   @default(now())
+  confirmedAt  DateTime?
+  cancelledAt  DateTime?
+
   @@index([membershipId, createdAt])
 }

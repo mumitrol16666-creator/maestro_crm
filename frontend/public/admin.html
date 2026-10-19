@@ -22,7 +22,7 @@
         href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=Bebas+Neue&display=swap"
         rel="stylesheet">
 
-    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro88">
+    <link rel="stylesheet" href="/css/admin-styles.css?v=maestro89">
     <link rel="stylesheet" href="/css/toast.css?v=5">
     <link rel="stylesheet" href="/css/lesson-receipt.css?v=1">
 
@@ -730,6 +730,7 @@
                 </p>
                 <button class="btn-primary" onclick="renderLessonReviewQueue()">Обновить</button>
             </div>
+            <div id="sectorExamBanner" class="sector-exam-banner" hidden></div>
             <div id="lessonReviewList"></div>
         </section>
 
@@ -766,6 +767,7 @@
                         <option value="trial">Пробные</option>
                         <option value="theory">Теория</option>
                         <option value="rent">Аренда</option>
+                        <option value="exam">Экзамены</option>
                     </select>
                 </label>
                 <label>
@@ -2458,6 +2460,11 @@
             <form class="admin-form" id="classForm">
                 <input type="hidden" id="classId">
 
+                <div id="classSectorExamOffer" class="sector-exam-offer" hidden>
+                    <span id="classSectorExamOfferText">Экзамены ждут назначения</span>
+                    <button type="button" class="admin-btn btn-secondary" onclick="openSectorExamModal()">🎓 Назначить экзамен</button>
+                </div>
+
                 <div class="form-group">
                     <label>ТИП УРОКА</label>
                     <select class="admin-input" id="classLessonType" required>
@@ -2563,6 +2570,44 @@
     </div>
 
     <!-- Дневное расписание для просмотра и печати -->
+    <!-- План 1.11: назначение экзамена сектора в свободное время -->
+    <div class="modal" id="sectorExamModal">
+        <div class="modal-overlay" onclick="closeSectorExamModal()"></div>
+        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="sectorExamModalTitle">
+            <button class="modal-close" type="button" onclick="closeSectorExamModal()" aria-label="Закрыть">×</button>
+            <h2 class="modal-title" id="sectorExamModalTitle">НАЗНАЧИТЬ ЭКЗАМЕН</h2>
+            <p class="sector-exam-modal-note">Бесплатный дополнительный урок. Список проверки подготовлен в платформе обучения; ученик, родитель и преподаватель получат уведомление.</p>
+            <form class="admin-form" id="sectorExamForm" onsubmit="submitSectorExamSchedule(event)">
+                <div class="form-group">
+                    <label for="sectorExamSelect">ЭКЗАМЕН</label>
+                    <select class="admin-input" id="sectorExamSelect" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="sectorExamTeacher">ПРЕПОДАВАТЕЛЬ</label>
+                    <select class="admin-input" id="sectorExamTeacher" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="sectorExamRoom">КАБИНЕТ</label>
+                    <select class="admin-input" id="sectorExamRoom" required></select>
+                </div>
+                <div class="form-group">
+                    <label for="sectorExamDate">ДАТА</label>
+                    <input type="date" class="admin-input" id="sectorExamDate" required>
+                </div>
+                <div class="form-group sector-exam-times">
+                    <label>ВРЕМЯ
+                        <span class="sector-exam-time-row">
+                            <input type="time" class="admin-input" id="sectorExamStart" aria-label="Начало" required>
+                            <input type="time" class="admin-input" id="sectorExamEnd" aria-label="Окончание" required>
+                        </span>
+                    </label>
+                </div>
+                <p id="sectorExamError" class="sector-exam-error" role="alert" hidden></p>
+                <button type="submit" class="modal-submit" id="sectorExamSubmit">НАЗНАЧИТЬ ЭКЗАМЕН</button>
+            </form>
+        </div>
+    </div>
+
     <div class="modal daily-schedule-modal" id="dailyScheduleModal" aria-hidden="true">
         <div class="modal-overlay" id="dailyScheduleModalOverlay"></div>
         <div class="modal-content daily-schedule-modal__content" role="dialog" aria-modal="true"
@@ -3376,7 +3421,7 @@
     <script src="/js/modules/phase2/phase2Dialogs.js?v=2"></script>
     <script src="/js/modules/dashboard/dashboard.js?v=11"></script>
     <script src="/js/modules/memberships/actions.js?v=10"></script>
-    <script src="/js/modules/whatsapp/reminders.js?v=11"></script>
+    <script src="/js/modules/whatsapp/reminders.js?v=12"></script>
     <script src="/js/modules/whatsapp/inbox.js?v=2"></script>
     <script src="/js/modules/bookings/bookings.js?v=155"></script>
     <script src="/js/modules/students/student-balance-ledger.js?v=1"></script>
@@ -3391,8 +3436,9 @@
     <script src="/js/modules/rooms/rooms.js?v=106"></script>
     <script src="/js/modules/memberships/memberships.js?v=140"></script>
     <script src="/js/modules/memberships/rate-cards.js?v=2"></script>
-    <script src="/js/modules/schedule/schedule.js?v=179"></script>
-    <script src="/js/modules/lesson-review/lesson-review.js?v=4"></script>
+    <script src="/js/modules/schedule/schedule.js?v=180"></script>
+    <script src="/js/modules/lesson-review/lesson-review.js?v=5"></script>
+    <script src="/js/modules/schedule/sector-exams.js?v=2"></script>
     <script src="/js/modules/cashbox/cashbox.js?v=19"></script>
     <script src="/js/modules/shop/shop.js?v=4"></script>
 

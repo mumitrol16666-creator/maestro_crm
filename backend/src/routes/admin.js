@@ -12,7 +12,9 @@ const { enrichMembershipBalance } = require('../utils/membershipBalance');
 const { loadBalanceCoverageForMembershipRows } = require('../services/balanceCoverage');
 const {
     resolveStudentNotificationContact,
+    resolveStudentExamContacts,
 } = require('../services/studentNotificationRouting');
+const { buildExamInvitationMessage } = require('../services/sectorExams');
 const { buildLessonFollowupMessage } = require('../services/lessonFollowupMessage');
 const {
     STAFF_ASSIGNEE_ROLES,
@@ -944,7 +946,9 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
         const sevenDaysAgo = new Date(todayStart);
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
 
-        const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts, completedClasses] = await Promise.all([
+        const examWindowEnd = new Date(todayStart);
+        examWindowEnd.setDate(examWindowEnd.getDate() + 14);
+        const [todayClasses, tomorrowClasses, lowBalanceStudents, plannedContacts, completedClasses, examClasses] = await Promise.all([
             prisma.class.findMany({
                 where: {
                     isPractice: false,
@@ -1039,6 +1043,16 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 include: lessonInclude,
                 orderBy: { date: 'desc' },
             }),
+            // Plan 1.11: invitations to sector exams booked for the next two weeks.
+            prisma.class.findMany({
+                where: {
+                    classType: 'exam',
+                    status: 'scheduled',
+                    date: { gte: todayStart, lt: examWindowEnd },
+                },
+                include: lessonInclude,
+                orderBy: [{ date: 'asc' }, { startTime: 'asc' }],
+            }),
         ]);
 
         const today = mapReminderLessons(todayClasses, 'today');
@@ -1086,7 +1100,37 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
             .filter((item) => item.lessonType !== 'trial')
             .filter((item) => item.topic || item.homework || item.summary);
 
-        const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks, ...homework];
+        const exam = examClasses.flatMap((classRecord) => {
+            const student = classRecord.individualStudent;
+            if (!student) return [];
+            return resolveStudentExamContacts(student).map((recipient) => ({
+                id: `exam:${classRecord.id}:${student.id}:${String(recipient.phone).replace(/\D/g, '').slice(-10)}`,
+                classId: classRecord.id,
+                studentId: student.id,
+                studentName: reminderStudentName(student),
+                phone: recipient.phone,
+                recipientLabel: recipient.label || null,
+                recipientAudience: recipient.audience || null,
+                date: classRecord.date,
+                startTime: classRecord.startTime,
+                endTime: classRecord.endTime,
+                subject: classRecord.title,
+                lessonType: classRecord.classType,
+                roomName: classRecord.room?.name || null,
+                message: buildExamInvitationMessage({
+                    audience: recipient.audience,
+                    recipientName: recipient.recipientName,
+                    studentName: student.name,
+                    title: classRecord.title,
+                    date: classRecord.date,
+                    startTime: classRecord.startTime,
+                    roomName: classRecord.room?.name || null,
+                }),
+                messageSource: 'template',
+            }));
+        });
+
+        const allItems = [...today, ...tomorrow, ...oneLesson, ...tasks, ...homework, ...exam];
         const sentRows = allItems.length
             ? await prisma.activityLog.findMany({
                 where: {
@@ -1104,6 +1148,7 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
         const pendingOneLesson = pending(oneLesson);
         const pendingTasks = pending(tasks);
         const pendingHomework = pending(homework);
+        const pendingExam = pending(exam);
 
         res.json({
             success: true,
@@ -1114,13 +1159,15 @@ router.get('/whatsapp-reminders', authenticate, requireAdmin, async (req, res) =
                 homework: pendingHomework.length,
                 oneLesson: pendingOneLesson.length,
                 tasks: pendingTasks.length,
-                total: pendingToday.length + pendingTomorrow.length + pendingHomework.length + pendingOneLesson.length + pendingTasks.length,
+                exam: pendingExam.length,
+                total: pendingToday.length + pendingTomorrow.length + pendingHomework.length + pendingOneLesson.length + pendingTasks.length + pendingExam.length,
             },
             today: pendingToday,
             tomorrow: pendingTomorrow,
             homework: pendingHomework,
             oneLesson: pendingOneLesson,
             tasks: pendingTasks,
+            exam: pendingExam,
         });
     } catch (error) {
         console.error('Get WhatsApp reminders error:', error);
@@ -1133,7 +1180,7 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
         const kind = String(req.body?.kind || '');
         const itemId = String(req.body?.itemId || '');
         const studentId = String(req.body?.studentId || '');
-        if (!['today', 'tomorrow', 'oneLesson', 'tasks', 'homework'].includes(kind) || !itemId || !studentId) {
+        if (!['today', 'tomorrow', 'oneLesson', 'tasks', 'homework', 'exam'].includes(kind) || !itemId || !studentId) {
             return res.status(400).json({ success: false, error: 'Некорректное напоминание' });
         }
 
@@ -1153,6 +1200,7 @@ router.post('/whatsapp-reminders/sent', authenticate, requireAdmin, async (req, 
                 homework: 'Домашнее задание',
                 oneLesson: 'Оплата',
                 tasks: 'Запланированный контакт',
+                exam: 'Экзамен сектора',
             };
             const reminderLabel = reminderLabels[kind];
             await prisma.activityLog.create({

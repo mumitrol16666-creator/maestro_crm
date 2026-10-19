@@ -97,7 +97,7 @@ async function deductMembershipForClass(studentId, classRecord, addedById, tx, s
         classRecord = { ...classRecord, group: await db.group.findUnique({ where: { id: classRecord.groupId } }) };
     }
 
-    if (classRecord.classType === 'trial' || classRecord.isPractice) {
+    if (classRecord.classType === 'trial' || classRecord.classType === 'exam' || classRecord.isPractice) {
         return { deducted: false, reason: 'trial_or_practice' };
     }
 
@@ -173,7 +173,7 @@ async function useEmergencyFreezeForClass(studentId, classRecord, addedById, tx,
     await db.$queryRaw`SELECT id FROM "Student" WHERE id = ${studentId} FOR UPDATE`;
     if (classRecord.groupId) classRecord = { ...classRecord, group: await db.group.findUnique({ where: { id: classRecord.groupId } }) };
 
-    if (classRecord.classType === 'trial' || classRecord.isPractice) {
+    if (classRecord.classType === 'trial' || classRecord.classType === 'exam' || classRecord.isPractice) {
         return { frozen: false, reason: 'trial_or_practice' };
     }
 

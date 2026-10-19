@@ -156,6 +156,7 @@ function getScheduleTypeMeta(props = {}) {
         practice: { key: 'practice', icon: '♫', label: 'Открытая практика' },
         theory: { key: 'theory', icon: 'T', label: 'Теоретический урок' },
         rent: { key: 'rent', icon: '⌂', label: 'Аренда кабинета' },
+        exam: { key: 'exam', icon: '🎓', label: 'Экзамен сектора' },
     };
     return meta[type] || { key: scheduleSafeClass(type), icon: '•', label: scheduleTypeLabel(type) };
 }
@@ -1066,9 +1067,10 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                 }
             }
             // Для индивидуальных и пробных — показываем имя ученика
-            if (['individual', 'trial'].includes(cls.classType) && cls.individualStudent) {
+            if (['individual', 'trial', 'exam'].includes(cls.classType) && cls.individualStudent) {
                 const compactName = formatScheduleShortPersonName(cls.individualStudent, 'Ученик');
-                displayTitle = `${cls.classType === 'trial' ? 'Пробный' : 'Инд'}: ${compactName}`;
+                const prefix = cls.classType === 'trial' ? 'Пробный' : cls.classType === 'exam' ? 'Экзамен' : 'Инд';
+                displayTitle = `${prefix}: ${compactName}`;
             }
 
             return {
@@ -1232,6 +1234,7 @@ function scheduleTypeLabel(value) {
         trial: 'Пробный урок',
         theory: 'Теоретический урок',
         rent: 'Аренда кабинета',
+        exam: 'Экзамен сектора',
     })[value] || 'Занятие';
 }
 
@@ -3554,6 +3557,7 @@ async function openClassModal(dateInfo = null) {
     await Promise.all(loadPromises);
     updateClassLessonTypeUI();
     updateClassDeliveryUI();
+    if (typeof updateClassModalSectorExamOffer === 'function') updateClassModalSectorExamOffer();
 }
 
 // Закрыть модалку занятия
@@ -5741,6 +5745,8 @@ async function approveClass() {
     currentClassForAttendance = freshClass;
     updateAttendanceActionButtons(freshClass);
     const isTrialLesson = freshClass.classType === 'trial';
+    // План 1.11: экзамен сектора — бесплатный урок, тариф не выбирается, посещаемость сохраняется.
+    const isFreeExamLesson = freshClass.classType === 'exam';
 
     if (!['pending_admin_review', 'scheduled', 'started', 'not_filled'].includes(freshClass.status)) {
         toast.error('Урок нельзя подтвердить в текущем статусе');
@@ -5762,6 +5768,7 @@ async function approveClass() {
         const chargeStudentIds = getStudentsToCharge();
         if (
             !isTrialLesson &&
+            !isFreeExamLesson &&
             freshClass.teacherOutcomeHint !== 'not_held' &&
             chargeStudentIds.length &&
             currentBillingClassId !== classId

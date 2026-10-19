@@ -97,7 +97,9 @@ function getLessonReviewChecks(cls) {
         checks.push({ level: 'warning', title: 'Никто не пришёл', detail: 'Проверьте, не нужно ли вернуть преподавателю или применить экстренную отмену' });
     }
 
-    if (stats.charged > 0) {
+    if (cls?.classType === 'exam') {
+        checks.push({ level: 'info', title: 'Экзамен сектора', detail: 'Бесплатный урок: подтверждение сохранит посещаемость без списаний' });
+    } else if (stats.charged > 0) {
         checks.push({ level: 'warning', title: `${stats.charged} списаний`, detail: 'Подтверждение изменит баланс/абонемент учеников' });
     }
 
@@ -181,6 +183,8 @@ function renderLessonReviewSummary(classes) {
 async function renderLessonReviewQueue() {
     const container = document.getElementById('lessonReviewList');
     if (!container) return;
+    // План 1.11: плашка «требуется назначить экзаменационный урок».
+    if (typeof renderSectorExamBanner === 'function') renderSectorExamBanner(true);
 
     container.innerHTML = `<p style="text-align:center; opacity:0.6; padding:40px;">Загрузка...</p>`;
 

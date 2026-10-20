@@ -1594,6 +1594,52 @@ async function getManagementDayOverview(now = new Date()) {
     };
 }
 
+/**
+ * Plan 1.13: groups by id with their active students. The platform's admin prepares a group
+ * sector exam for chosen members and needs the roster without going through a teacher.
+ */
+async function getGroupRosters(crmGroupIds) {
+    const ids = [...new Set((crmGroupIds || []).map((id) => String(id).trim()).filter(Boolean))].slice(0, 200);
+    if (!ids.length) return { success: true, data: { groups: [] } };
+    const groups = await prisma.group.findMany({
+        where: { id: { in: ids } },
+        select: {
+            id: true,
+            name: true,
+            direction: true,
+            isActive: true,
+            teacherId: true,
+            students: {
+                where: {
+                    status: { in: ['active', 'Active'] },
+                    student: { role: 'student', status: 'active' },
+                },
+                select: {
+                    student: {
+                        select: { id: true, name: true, lastName: true, middleName: true, studentAvatar: true, assignedTeacherId: true },
+                    },
+                },
+                orderBy: { student: { lastName: 'asc' } },
+            },
+        },
+    });
+    return {
+        success: true,
+        data: {
+            groups: groups.map((group) => ({
+                crmGroupId: group.id,
+                name: group.name,
+                direction: group.direction,
+                isActive: group.isActive,
+                crmTeacherId: group.teacherId || null,
+                students: group.students
+                    .filter((row) => row.student)
+                    .map((row) => mapTeacherGroupStudent(row.student, group.teacherId)),
+            })),
+        },
+    };
+}
+
 module.exports = {
     buildTeacherStudentRosterWhere,
     buildRecentLessonsByStudent,
@@ -1603,6 +1649,7 @@ module.exports = {
     getTeacherOfflineClasses,
     getTeacherStudents,
     getTeacherGroups,
+    getGroupRosters,
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,

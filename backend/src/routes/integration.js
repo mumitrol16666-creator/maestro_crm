@@ -10,6 +10,7 @@ const {
     getTeacherOfflineClasses,
     getTeacherStudents,
     getTeacherGroups,
+    getGroupRosters,
     getClassCard,
     getClassStudents,
     getStudentOfflineSummary,
@@ -792,6 +793,17 @@ router.get('/teachers/:crmTeacherId/students', async (req, res) => {
 });
 
 // GET /api/integration/v1/teachers/:crmTeacherId/groups
+// GET /api/integration/v1/groups?ids=a,b — plan 1.13: group rosters for the platform admin
+router.get('/groups', async (req, res) => {
+    try {
+        const ids = String(req.query.ids || '').split(',');
+        return res.json(await getGroupRosters(ids));
+    } catch (error) {
+        console.error('[integration] group rosters error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to load groups' });
+    }
+});
+
 router.get('/teachers/:crmTeacherId/groups', async (req, res) => {
     try {
         const result = await getTeacherGroups(req.params.crmTeacherId);

@@ -34,10 +34,13 @@ function isSectorExamClass(classRecord) {
 }
 
 function sectorExamTitle(exam) {
-    const sector = exam?.sectorSequence ? `сектора ${exam.sectorSequence}` : 'сектора';
+    // Plan 1.13: a group sector exam is one exam per member; the title names the group.
+    const group = exam?.crmGroupId ? 'группы ' : '';
+    const sector = exam?.sectorSequence ? `сектора ${group}${exam.sectorSequence}` : `сектора ${group}`.trim();
     const retake = exam?.attempt > 1 ? ', пересдача' : '';
     const direction = exam?.directionTitle ? ` · ${exam.directionTitle}` : '';
-    return `Экзамен ${sector}${retake}${direction}`;
+    const groupName = exam?.groupName ? ` · ${exam.groupName}` : '';
+    return `Экзамен ${sector}${retake}${direction}${groupName}`;
 }
 
 /** The lesson's start as an instant: CRM keeps the date and a local Aqtobe time (UTC+5). */
@@ -96,6 +99,11 @@ async function listPendingSectorExams(deps = {}) {
         })
         : [];
     const byId = new Map(students.map((student) => [student.id, student]));
+    const groupIds = [...new Set(exams.map((exam) => exam.crmGroupId).filter(Boolean))];
+    const groups = groupIds.length
+        ? await db.group.findMany({ where: { id: { in: groupIds } }, select: { id: true, name: true, teacherId: true } })
+        : [];
+    const groupById = new Map(groups.map((group) => [group.id, group]));
     // Booked here but not yet confirmed by the platform: keep them out of the queue.
     const booked = exams.length
         ? await db.classSectorExam.findMany({
@@ -110,14 +118,17 @@ async function listPendingSectorExams(deps = {}) {
             .filter((exam) => !bookedIds.has(exam.examId))
             .map((exam) => {
                 const student = byId.get(exam.crmStudentId);
+                const group = exam.crmGroupId ? groupById.get(exam.crmGroupId) : null;
+                const withGroup = { ...exam, crmGroupId: exam.crmGroupId || null, groupName: group?.name || null };
                 return {
-                    ...exam,
+                    ...withGroup,
                     studentName: exam.studentName
                         || [student?.lastName, student?.name].filter(Boolean).join(' ')
                         || 'Ученик',
                     knownStudent: Boolean(student),
-                    suggestedTeacherId: student?.assignedTeacherId || null,
-                    title: sectorExamTitle(exam),
+                    // A group exam is held by the group's teacher.
+                    suggestedTeacherId: group?.teacherId || student?.assignedTeacherId || null,
+                    title: sectorExamTitle(withGroup),
                 };
             }),
     };
@@ -134,6 +145,13 @@ function examLessonTitle(exams) {
     const count = exams.length;
     const students = count % 10 === 1 && count % 100 !== 11 ? 'ученик'
         : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? 'ученика' : 'учеников';
+    // Plan 1.13: the members of one group sitting their group sector exam together.
+    const groups = new Set(exams.map((exam) => exam.crmGroupId || ''));
+    if (groups.size === 1 && exams[0].crmGroupId) {
+        const sequences = new Set(exams.map((exam) => exam.sectorSequence));
+        const sequence = sequences.size === 1 && exams[0].sectorSequence ? ` ${exams[0].sectorSequence}` : '';
+        return `Экзамен сектора группы${sequence}${directions.length === 1 ? ` · ${directions[0]}` : ''} · ${count} ${students}`;
+    }
     return `Экзамен секторов${directions.length === 1 ? ` · ${directions[0]}` : ''} · ${count} ${students}`;
 }
 
@@ -344,7 +362,10 @@ function formatDayMonth(date) {
 
 /** How one student's invitation names the exam: a shared lesson's title counts students instead. */
 function studentExamTitle(lessonTitle) {
-    const shared = String(lessonTitle || '').match(/^Экзамен секторов(?: · (.+?))? · \d+ учени/);
+    const title = String(lessonTitle || '');
+    const group = title.match(/^(Экзамен сектора группы(?: \d+)?(?: · .+?)?) · \d+ учени/);
+    if (group) return group[1];
+    const shared = title.match(/^Экзамен секторов(?: · (.+?))? · \d+ учени/);
     if (!shared) return lessonTitle || 'Экзамен сектора';
     return shared[1] ? `Экзамен сектора · ${shared[1]}` : 'Экзамен сектора';
 }

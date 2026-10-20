@@ -47,3 +47,11 @@ test('an exam invitation goes once to the student and once to a parent', () => {
     const child = { name: 'Алия', customerName: 'Ерлан', phone: '+77001112233', additionalPhones: [] };
     assert.deepEqual(resolveStudentExamContacts(child).map(contact => contact.audience), ['parent']);
 });
+
+test('avatars sent with http:// are upgraded to https, local ones are kept', () => {
+    const { secureMediaAvatarUrl } = require('../src/routes/integration');
+    assert.equal(secureMediaAvatarUrl('http://maestro.kz/api/v1/media/images/a.png'), 'https://maestro.kz/api/v1/media/images/a.png');
+    assert.equal(secureMediaAvatarUrl('https://maestro.kz/api/v1/media/images/a.png'), 'https://maestro.kz/api/v1/media/images/a.png');
+    assert.equal(secureMediaAvatarUrl('http://127.0.0.1:4001/api/v1/media/images/a.png'), 'http://127.0.0.1:4001/api/v1/media/images/a.png');
+    assert.equal(secureMediaAvatarUrl('http://example.com/photo.png'), 'http://example.com/photo.png');
+});

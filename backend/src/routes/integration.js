@@ -905,6 +905,17 @@ router.get('/students/:crmStudentId/teachers', async (req, res) => {
     }
 });
 
+/**
+ * The learning platform runs behind a TLS proxy and used to send http:// avatar links; CRM pages are
+ * served over https, so such links would load as mixed content. Media of a real host is upgraded;
+ * local development addresses stay as they are.
+ */
+function secureMediaAvatarUrl(value) {
+    if (!/^http:\/\/[^/]+\/api\/v1\/media\//i.test(value)) return value;
+    if (/^http:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?\//i.test(value)) return value;
+    return value.replace(/^http:\/\//i, 'https://');
+}
+
 // POST /api/integration/v1/students/:crmStudentId/avatar
 router.post('/students/:crmStudentId/avatar', async (req, res) => {
     try {
@@ -915,7 +926,7 @@ router.post('/students/:crmStudentId/avatar', async (req, res) => {
         if (!/^https?:\/\//i.test(avatarUrl)) {
             return res.status(400).json({ success: false, error: 'avatarUrl must be absolute URL' });
         }
-        avatarUrl = avatarUrl.replace(/^http:\/\/maestro-school\.duckdns\.org/i, 'https://maestro-school.duckdns.org');
+        avatarUrl = secureMediaAvatarUrl(avatarUrl);
 
         const existing = await prisma.student.findUnique({
             where: { id: req.params.crmStudentId },
@@ -1111,3 +1122,4 @@ router.post('/classes/:crmClassId/reopen', (_req, res) => res.status(409).json({
 }));
 
 module.exports = router;
+module.exports.secureMediaAvatarUrl = secureMediaAvatarUrl;

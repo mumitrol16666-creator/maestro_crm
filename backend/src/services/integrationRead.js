@@ -261,6 +261,8 @@ function mapStudentLesson(cls, now = new Date(), homeworkReview = null, reviewCo
         nextLessonFocus: published ? cls.nextLessonFocus : null,
         materials: published && Array.isArray(cls.materials) ? cls.materials : [],
         attended: attendee?.attended ?? null,
+        // Plan 3.2: the parent's attendance line tells "late" and "excused" from a plain absence.
+        attendanceStatus: attendee?.attendanceStatus || null,
         isPast: isLessonPast(cls, now),
     };
 }

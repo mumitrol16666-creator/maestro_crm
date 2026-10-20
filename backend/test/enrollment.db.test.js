@@ -5,7 +5,7 @@ if (!process.env.TEST_DATABASE_URL) {
 } else {
     const url = new URL(process.env.TEST_DATABASE_URL);
     assert.ok(['localhost', '127.0.0.1'].includes(url.hostname) && /test|qa/.test(url.pathname));
-    Object.assign(process.env, { NODE_ENV: 'test', DATABASE_URL: process.env.TEST_DATABASE_URL, JWT_SECRET: 'enrollment-test-only', LEARNING_PLATFORM_API_URL: 'http://127.0.0.1:9', TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '' });
+    Object.assign(process.env, { NODE_ENV: 'test', DATABASE_URL: process.env.TEST_DATABASE_URL, JWT_SECRET: 'enrollment-test-only', INTEGRATION_SERVICE_SECRET: 'enrollment-integration-test-secret', LEARNING_PLATFORM_API_URL: 'http://127.0.0.1:9', TELEGRAM_BOT_TOKEN: '', TELEGRAM_CHAT_ID: '' });
     const express = require('express'); const jwt = require('jsonwebtoken');
     const { prisma } = require('../src/config/db');
     const { auditBalanceLedger } = require('../scripts/audit-student-balance-ledger');
@@ -34,7 +34,7 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(r.status, 200, JSON.stringify(r)); return r.data.intent;
     }
     test.before(async () => {
-        const app = express(); app.use(express.json()); app.use('/api/enrollments', require('../src/routes/enrollments')); app.use('/api/bookings', require('../src/routes/bookings')); app.use('/api/students', require('../src/routes/students'));
+        const app = express(); app.use(express.json()); app.use('/api/enrollments', require('../src/routes/enrollments')); app.use('/api/bookings', require('../src/routes/bookings')); app.use('/api/students', require('../src/routes/students')); app.use('/api/integration/v1', require('../src/routes/integration'));
         await new Promise(resolve => { server = app.listen(0, '127.0.0.1', resolve); }); base = `http://127.0.0.1:${server.address().port}/api/enrollments`;
     });
     test.beforeEach(async () => {
@@ -44,6 +44,31 @@ if (!process.env.TEST_DATABASE_URL) {
     });
     test.afterEach(async () => assert.equal((await auditBalanceLedger(prisma)).consistent, true));
     test.after(async () => { await new Promise(resolve => server.close(resolve)); await prisma.$disconnect(); });
+    test('plan 3.6: the platform revoking a parent reopens the parent step of an open enrollment only', async () => {
+        const open = await start();
+        const revoke = async () => {
+            const response = await fetch(base.replace('/api/enrollments', '/api/integration/v1') + '/family/parent-link-revoked', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', Authorization: 'Bearer enrollment-integration-test-secret', 'X-Integration-System': 'learning-platform' },
+                body: JSON.stringify({ crmStudentId: student.id, parentUserId: 'platform-parent-1' }),
+            });
+            const body = await response.json();
+            assert.equal(response.status, 200, JSON.stringify(body));
+            return body.data;
+        };
+        await prisma.enrollment.update({ where: { id: open.id }, data: { parentUserId: 'platform-parent-1', parentHandedAt: new Date() } });
+        assert.equal((await revoke()).reopened, 1);
+        const reopened = await prisma.enrollment.findUniqueOrThrow({ where: { id: open.id } });
+        assert.equal(reopened.parentUserId, null);
+        assert.equal(reopened.parentHandedAt, null);
+
+        // A finished enrollment keeps its history: CRM reads the live link from the platform.
+        await prisma.enrollment.update({ where: { id: open.id }, data: { parentUserId: 'platform-parent-1', completedAt: new Date() } });
+        const finished = await revoke();
+        assert.deepEqual(finished, { enrollments: 1, reopened: 0 });
+        assert.equal((await prisma.enrollment.findUniqueOrThrow({ where: { id: open.id } })).parentUserId, 'platform-parent-1');
+    });
+
     test('two administrators resume one enrollment; partial steps persist; stale revision cannot overwrite', async () => {
         const results = await Promise.all([req('/start', { studentId: student.id }), req('/start', { studentId: student.id }, { actor: other })]);
         assert.equal(results[0].data.enrollment.id, results[1].data.enrollment.id);

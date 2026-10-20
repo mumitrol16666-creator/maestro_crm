@@ -793,6 +793,30 @@ router.get('/teachers/:crmTeacherId/students', async (req, res) => {
 });
 
 // GET /api/integration/v1/teachers/:crmTeacherId/groups
+// POST /api/integration/v1/family/parent-link-revoked — plan 3.6: the platform revoked a parent's
+// access. An enrollment still in progress asks for the parent access step again; a finished one
+// keeps its history (CRM reads the live link state from the platform anyway).
+router.post('/family/parent-link-revoked', async (req, res) => {
+    try {
+        const { crmStudentId, parentUserId } = req.body || {};
+        if (!crmStudentId || !parentUserId) {
+            return res.status(400).json({ success: false, error: 'crmStudentId and parentUserId are required' });
+        }
+        const enrollments = await prisma.enrollment.findMany({
+            where: { studentId: String(crmStudentId), parentUserId: String(parentUserId) },
+            select: { id: true, completedAt: true },
+        });
+        const open = enrollments.filter((item) => !item.completedAt).map((item) => item.id);
+        if (open.length) {
+            await prisma.enrollment.updateMany({ where: { id: { in: open } }, data: { parentUserId: null, parentHandedAt: null } });
+        }
+        return res.json({ success: true, data: { enrollments: enrollments.length, reopened: open.length } });
+    } catch (error) {
+        console.error('[integration] parent link revoked error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to record parent link revocation' });
+    }
+});
+
 // GET /api/integration/v1/groups?ids=a,b — plan 1.13: group rosters for the platform admin
 router.get('/groups', async (req, res) => {
     try {

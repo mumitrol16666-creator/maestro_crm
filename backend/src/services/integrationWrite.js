@@ -146,55 +146,6 @@ async function teacherStart(crmClassId, { crmTeacherId }) {
     };
 }
 
-async function teacherFinish(crmClassId, { crmTeacherId, comment }) {
-    const loaded = await loadClassForTeacher(crmClassId, crmTeacherId);
-    if (!loaded.success) return loaded;
-
-    const { cls } = loaded;
-
-    if (!['started', 'scheduled'].includes(cls.status)) {
-        return { success: false, error: 'Class is already closed or awaiting review', status: 400 };
-    }
-    if (cls.status === 'scheduled' && !isClassEnded(cls)) {
-        return {
-            success: false,
-            error: 'Завершить урок можно после его окончания или после фактического запуска',
-            status: 400,
-        };
-    }
-
-    const updateData = { finishedAt: cls.finishedAt || new Date() };
-    if (comment) {
-        updateData.teacherComment = cls.teacherComment
-            ? `${cls.teacherComment}\n${comment}`
-            : comment;
-    }
-
-    if (cls.status === 'scheduled') {
-        updateData.status = 'started';
-    }
-
-    const updated = await prisma.class.update({
-        where: { id: crmClassId },
-        data: updateData,
-        include: {
-            teacher: { select: { id: true, name: true, lastName: true, middleName: true } },
-            group: { select: { id: true, name: true } },
-            room: { select: { id: true, name: true } },
-        },
-    });
-
-    return {
-        success: true,
-        data: {
-            crmClassId,
-            status: updated.status,
-            finishedAt: new Date().toISOString(),
-            class: mapClassDetail(updated),
-        },
-    };
-}
-
 async function teacherSubmit(crmClassId, payload) {
     const {
         crmTeacherId,
@@ -889,7 +840,6 @@ async function adminApproveClass(crmClassId, payload = {}) {
 
 module.exports = {
     teacherStart,
-    teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
     teacherWithdraw,

@@ -57,7 +57,6 @@ function formatIntegrationPeriodName(start, end) {
 }
 const {
     teacherStart,
-    teacherFinish,
     teacherSubmit,
     teacherMarkNotHeld,
     teacherWithdraw,
@@ -987,21 +986,6 @@ router.post('/classes/:crmClassId/teacher-start', async (req, res) => {
     } catch (error) {
         console.error('[integration] teacher-start error:', error);
         return res.status(500).json({ success: false, error: 'Failed to start class' });
-    }
-});
-
-// POST /api/integration/v1/classes/:crmClassId/teacher-finish
-router.post('/classes/:crmClassId/teacher-finish', async (req, res) => {
-    try {
-        const { crmTeacherId, comment } = req.body || {};
-        const result = await teacherFinish(req.params.crmClassId, { crmTeacherId, comment });
-        if (!result.success) {
-            return res.status(result.status || 400).json(result);
-        }
-        return res.json(result);
-    } catch (error) {
-        console.error('[integration] teacher-finish error:', error);
-        return res.status(500).json({ success: false, error: 'Failed to finish class' });
     }
 });
 

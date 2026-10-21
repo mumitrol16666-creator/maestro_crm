@@ -4,6 +4,7 @@ const { notify } = require('./notifications');
 const { mapClassDetail } = require('./integrationRead');
 const {
     isClassEnded,
+    isClassStarted,
     isClassReportSubmittable,
     REPORT_SUBMISSION_LEAD_MINUTES,
 } = require('./automation');
@@ -200,10 +201,10 @@ async function teacherSubmit(crmClassId, payload) {
             code: 'REPORT_SUBMISSION_TOO_EARLY',
         };
     }
-    if (!submission.requiresReport && !isClassEnded(cls)) {
+    if (!submission.requiresReport && !isClassStarted(cls)) {
         return {
             success: false,
-            error: 'Передать отметку об отсутствии можно после окончания урока',
+            error: 'Передать отметку об отсутствии можно с начала урока',
             status: 400,
             code: 'ATTENDANCE_SUBMISSION_TOO_EARLY',
         };

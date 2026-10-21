@@ -37,3 +37,16 @@ test('за 20 минут до конца урок ещё не считается
 
     assert.equal(isClassEnded(lesson, reportWindowOpen), false);
 });
+
+test('отметку «ученик не пришёл» можно передать с начала урока, не дожидаясь конца', () => {
+    const { isClassStarted } = require('../src/services/automation');
+    const lesson = {
+        date: new Date('2026-07-20T00:00:00.000Z'),
+        startTime: '17:00',
+        endTime: '18:00',
+    };
+
+    assert.equal(isClassStarted(lesson, new Date('2026-07-20T16:59:00.000Z')), false);
+    assert.equal(isClassStarted(lesson, new Date('2026-07-20T17:00:00.000Z')), true);
+    assert.equal(isClassEnded(lesson, new Date('2026-07-20T17:00:00.000Z')), false);
+});

@@ -35,6 +35,7 @@ const {
 } = require('../services/payroll');
 const {
     isClassEnded,
+    isClassStarted,
     isClassReportSubmittable,
     REPORT_SUBMISSION_LEAD_MINUTES,
 } = require('../services/automation');
@@ -2611,10 +2612,10 @@ router.post('/:id/submit-review', authenticate, requireTeacherOrAdmin, async (re
                 code: 'REPORT_SUBMISSION_TOO_EARLY',
             });
         }
-        if (req.user?.role === 'teacher' && !submission.requiresReport && !isClassEnded(classRecord)) {
+        if (req.user?.role === 'teacher' && !submission.requiresReport && !isClassStarted(classRecord)) {
             return res.status(400).json({
                 success: false,
-                error: 'Передать отметку об отсутствии можно после окончания урока',
+                error: 'Передать отметку об отсутствии можно с начала урока',
                 code: 'ATTENDANCE_SUBMISSION_TOO_EARLY',
             });
         }

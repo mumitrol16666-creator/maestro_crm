@@ -20,6 +20,14 @@ function isClassEnded(cls, almatyNow = getAlmatyNow()) {
     return almatyNow >= getClassEndAlmaty(cls);
 }
 
+/** The lesson time has come: a teacher can say the student did not show up (plan 1.14). */
+function isClassStarted(cls, almatyNow = getAlmatyNow()) {
+    const start = new Date(cls.date.getTime() + ALMATY_OFFSET_MS);
+    const [startH, startM] = String(cls.startTime || '00:00').split(':').map(Number);
+    start.setUTCHours(startH, startM, 0, 0);
+    return almatyNow >= start;
+}
+
 function isClassReportSubmittable(
     cls,
     almatyNow = getAlmatyNow(),
@@ -138,6 +146,7 @@ module.exports = {
     processHousekeeping,
     processPastClasses,
     isClassEnded,
+    isClassStarted,
     isClassReportSubmittable,
     REPORT_SUBMISSION_LEAD_MINUTES,
 };

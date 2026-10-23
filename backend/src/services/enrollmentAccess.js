@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { learningPlatformSecret } = require('./learningPlatformAuth');
 const { prisma } = require('../config/db');
 const { fail, isMinor } = require('./enrollment');
 const { provisionCrmStudent } = require('./userLink');
@@ -7,7 +8,7 @@ async function platform(path, data) {
     if (!base) throw fail('Адрес Платформы не настроен.', 503);
     try {
         const response = await axios({ url: `${base.replace(/\/$/, '')}/api/integration/v1${path}`, method: data ? 'POST' : 'GET', data,
-            headers: { Authorization: `Bearer ${process.env.INTEGRATION_SERVICE_SECRET}`, 'X-Integration-System': 'crm' }, timeout: 15000 });
+            headers: { Authorization: `Bearer ${learningPlatformSecret()}`, 'X-Integration-System': 'crm' }, timeout: 15000 });
         return response.data.data;
     } catch (error) {
         const message = error.response?.data?.error;

@@ -41,6 +41,7 @@ if (process.env.NODE_ENV !== 'production') {
 parsedUrl('DATABASE_URL', ['postgresql:', 'postgres:']);
 secureSecret('JWT_SECRET');
 secureSecret('INTEGRATION_SERVICE_SECRET');
+if (process.env.LEARNING_PLATFORM_SECRET) secureSecret('LEARNING_PLATFORM_SECRET');
 secureSecret('INTEGRATION_SSO_SECRET');
 
 const frontendUrl = parsedUrl('FRONTEND_URL', ['https:']);

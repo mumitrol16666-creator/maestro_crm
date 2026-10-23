@@ -1,4 +1,5 @@
 const axios = require('axios');
+const { learningPlatformSecret } = require('./learningPlatformAuth');
 const { prisma } = require('../config/db');
 const { executeOutboundIntegration } = require('./integrationJournal');
 const {
@@ -23,7 +24,7 @@ function learningPlatformBaseUrl() {
 
 function integrationHeaders() {
     return {
-        Authorization: `Bearer ${process.env.INTEGRATION_SERVICE_SECRET}`,
+        Authorization: `Bearer ${learningPlatformSecret()}`,
         'X-Integration-System': 'crm',
         Accept: 'application/json',
     };

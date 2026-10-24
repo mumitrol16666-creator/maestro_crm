@@ -34,7 +34,6 @@ const {
     reconcileLockedClassPayrollAdjustment,
 } = require('../services/payroll');
 const {
-    isClassEnded,
     isClassStarted,
     isClassReportSubmittable,
     REPORT_SUBMISSION_LEAD_MINUTES,

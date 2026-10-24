@@ -273,7 +273,11 @@ function studentLessonStreamKey(cls) {
     return `class:${cls.id}`;
 }
 
-function buildStudentLessonHistory(classes, now = new Date(), limit = 20) {
+// The student's history keeps the last 60 lessons: notifications about a confirmed lesson link
+// into it, and 20 covered barely two months of a twice-a-week schedule.
+const STUDENT_LESSON_HISTORY_LIMIT = 60;
+
+function buildStudentLessonHistory(classes, now = new Date(), limit = STUDENT_LESSON_HISTORY_LIMIT) {
     const historySource = [...classes]
         .sort((left, right) => {
             const dateCompare = new Date(right.date).getTime() - new Date(left.date).getTime();
@@ -1157,7 +1161,7 @@ async function getStudentOfflineSummary(crmStudentId) {
                 },
             },
             orderBy: [{ date: 'desc' }, { startTime: 'desc' }],
-            take: 20,
+            take: STUDENT_LESSON_HISTORY_LIMIT,
         }),
     ]);
 

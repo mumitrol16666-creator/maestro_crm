@@ -41,6 +41,11 @@ if (!process.env.TEST_DATABASE_URL) {
   assert.equal((await teacherSetAttendance(grouped.id,{crmTeacherId:teacher.id,studentId:stranger.id,attendanceStatus:'present'})).status,403);
   const trial=await prisma.class.create({data:{...base,classType:'trial'}});
   assert.equal((await teacherSetAttendance(trial.id,{crmTeacherId:teacher.id,studentId:`trial:${trial.id}`,attendanceStatus:'present'})).success,true);
+  // Once the report is with the admin, the teacher's attendance (incl. «Отменить урок») is refused.
+  const pending=await prisma.class.create({data:{...base,individualStudentId:pupil.id,status:'pending_admin_review',teacherOutcomeHint:'held'}});
+  const late=await teacherSetAttendance(pending.id,{crmTeacherId:teacher.id,studentId:pupil.id,attendanceStatus:'unexcused_absence'});
+  assert.equal(late.status,409);assert.equal(late.code,'LESSON_PENDING_REVIEW');
+  assert.equal(await prisma.classAttendee.count({where:{classId:pending.id,studentId:pupil.id}}),0);
  });
  test('service cannot reopen a lesson or replay an old reopen response',async()=>{
   const express=require('express');const app=express();app.use(express.json());app.use(require('../src/middleware/idempotency'));

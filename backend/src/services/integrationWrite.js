@@ -25,6 +25,7 @@ const { loadLessonRosterState, validateLessonSubmission } = require('./lessonSub
 const { getTrialParticipantId, isTrialParticipantId } = require('./trialParticipant');
 const { findTrialBookingForClass, isVirtualTrialClass } = require('./trialClass');
 const { validateReviewedHomeworkClass } = require('./homeworkSource');
+const { isSectorExamClass } = require('./sectorExams');
 
 async function loadClassForTeacher(crmClassId, crmTeacherId) {
     if (!crmTeacherId) {
@@ -377,6 +378,16 @@ async function teacherSetAttendance(crmClassId, { crmTeacherId, studentId, atten
         if (['completed', 'cancelled'].includes(cls.status)) {
             return { success: false, error: 'Class is already closed', status: 400 };
         }
+        // The report is with the admin: a late attendance change would flip a held lesson into
+        // «прогул» for everyone while the report still says the lesson took place.
+        if (cls.status === 'pending_admin_review') {
+            return {
+                success: false,
+                error: 'Отчёт уже у администратора: посещаемость меняет администратор при подтверждении',
+                status: 409,
+                code: 'LESSON_PENDING_REVIEW',
+            };
+        }
 
         const trialBooking = cls.classType === 'trial'
             ? { id: 'class-type-trial' }
@@ -645,9 +656,10 @@ async function adminApproveClass(crmClassId, payload = {}) {
             ? { id: 'class-type-trial' }
             : await findTrialBookingForClass(tx, classRecord.id);
         const isTrial = Boolean(classRecord.classType === 'trial' || trialBooking);
+        const isFreeLesson = isTrial || isSectorExamClass(classRecord);
 
-        // Оплата диагностики проводится отдельно и не списывается с баланса ученика.
-        if (classRecord.teacherOutcomeHint !== 'not_held' && !classRecord.noOneAttended && !isTrial && !classRecord.isPractice) {
+        // Оплата диагностики и экзамен сектора не списываются с баланса ученика.
+        if (classRecord.teacherOutcomeHint !== 'not_held' && !classRecord.noOneAttended && !isFreeLesson && !classRecord.isPractice) {
             const toProcess = attendees.filter((a) => (
                 a.studentId
                 && (shouldChargeAttendance(a.attendanceStatus) || isEmergencyFreezeAttendance(a.attendanceStatus))

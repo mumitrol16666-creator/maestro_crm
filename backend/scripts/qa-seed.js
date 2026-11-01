@@ -1,8 +1,8 @@
 require('dotenv').config();
-const bcrypt = require('bcryptjs');
 const { assertQaEnvironment } = require('../src/services/qaEnvironment');
 assertQaEnvironment();
 const { prisma } = require('../src/config/db');
+const { passwordFields } = require('../src/services/passwordVault');
 
 const QA_PASSWORD = 'QaMaestro2026!';
 const APP_IDS = {
@@ -45,7 +45,7 @@ function dayOffset(offset) {
 }
 
 async function upsertPerson({ id, appUserId, name, lastName, phone, role, status = 'active', directions = [], assignedTeacherId = null }) {
-    const password = await bcrypt.hash(QA_PASSWORD, 10);
+    const passwordData = await passwordFields(QA_PASSWORD);
     return prisma.student.upsert({
         where: { id },
         update: {
@@ -55,7 +55,7 @@ async function upsertPerson({ id, appUserId, name, lastName, phone, role, status
             phone,
             phoneDigits: phone.replace(/\D/g, ''),
             email: `${id.toLowerCase()}@qa.maestro.local`,
-            password,
+            ...passwordData,
             role,
             status,
             learningDirections: role === 'student' ? directions : [],
@@ -72,7 +72,7 @@ async function upsertPerson({ id, appUserId, name, lastName, phone, role, status
             phone,
             phoneDigits: phone.replace(/\D/g, ''),
             email: `${id.toLowerCase()}@qa.maestro.local`,
-            password,
+            ...passwordData,
             role,
             status,
             learningDirections: role === 'student' ? directions : [],

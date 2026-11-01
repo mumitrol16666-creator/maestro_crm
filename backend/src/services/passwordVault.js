@@ -13,10 +13,12 @@ let warnedInvalidKey = false;
 function vaultKey() {
     const raw = String(process.env[KEY_ENV] || '').trim();
     if (!raw) return null;
-    const key = /^[0-9a-f]{64}$/i.test(raw) ? Buffer.from(raw, 'hex') : Buffer.from(raw, 'base64');
+    const isHex = /^[0-9a-f]{64}$/i.test(raw);
+    const isBase64 = /^[A-Za-z0-9+/]{43}=$/.test(raw);
+    const key = isHex ? Buffer.from(raw, 'hex') : isBase64 ? Buffer.from(raw, 'base64') : Buffer.alloc(0);
     if (key.length !== 32) {
         if (!warnedInvalidKey) {
-            console.error(`[passwordVault] ${KEY_ENV} must be 32 bytes (base64 or 64 hex chars); password copies are off`);
+            console.error(`[passwordVault] ${KEY_ENV} must be 32 bytes: 44 base64 chars ending with = or 64 hex chars; password copies are off`);
             warnedInvalidKey = true;
         }
         return null;

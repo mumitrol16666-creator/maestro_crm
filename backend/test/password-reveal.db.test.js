@@ -136,6 +136,25 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(stored.length, 0);
     });
 
+    test('the integration journal refuses to replay a password change saved with hidden data', async () => {
+        const { retryIntegrationLog } = require('../src/services/integrationJournal');
+        const log = await prisma.integrationLog.create({ data: {
+            direction: 'outbound', system: 'learning-platform', operation: 'users.update-password', method: 'POST',
+            path: 'http://127.0.0.1:9/api/integration/v1/users/update-password',
+            status: 'failed', retryable: true, attempts: 1,
+            requestBody: { password: '[скрыто]', crmTeacherId: teacher.id },
+        } });
+        try {
+            const result = await retryIntegrationLog(log.id);
+            assert.equal(result.success, false);
+            assert.equal(result.status, 409);
+            const after = await prisma.integrationLog.findUnique({ where: { id: log.id } });
+            assert.equal(after.attempts, 1, 'nothing was sent');
+        } finally {
+            await prisma.integrationLog.delete({ where: { id: log.id } });
+        }
+    });
+
     test('without the server key nothing is stored and the reveal is switched off', async () => {
         const key = process.env.CRM_PASSWORD_VAULT_KEY;
         delete process.env.CRM_PASSWORD_VAULT_KEY;

@@ -2,6 +2,7 @@ const axios = require('axios');
 const { learningPlatformSecret } = require('./learningPlatformAuth');
 const { prisma } = require('../config/db');
 const {
+    REDACTED_MARKER,
     inboundResponseForAudit,
     isRetryableStatus,
     redact,
@@ -182,6 +183,16 @@ async function retryIntegrationLog(logId) {
     }
     if (!log.retryable && log.status !== 'failed') {
         return { success: false, status: 400, error: 'Эту операцию нельзя повторить' };
+    }
+
+    // The journal keeps request bodies with passwords, phones and emails replaced by '[скрыто]'.
+    // Replaying such a body would write the marker itself into the app (a password '[скрыто]').
+    if (JSON.stringify(log.requestBody ?? null).includes(REDACTED_MARKER)) {
+        return {
+            success: false,
+            status: 409,
+            error: 'В журнале эта операция сохранена со скрытыми данными (пароль, телефон или почта), повторить её отсюда нельзя. Повторите действие из карточки пользователя.',
+        };
     }
 
     const attempts = log.attempts + 1;

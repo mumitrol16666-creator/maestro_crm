@@ -900,6 +900,14 @@ router.post('/:id/reveal-password', authenticate, requireAdmin, async (req, res)
             return res.status(503).json({ success: false, code: 'PASSWORD_VAULT_DISABLED', error: 'Просмотр паролей не включён на сервере' });
         }
         const password = target.passwordEncrypted ? openPassword(target.passwordEncrypted) : null;
+        if (target.passwordEncrypted && !password) {
+            console.error(`[passwordVault] copy for ${target.id} does not open: the key changed or the value is damaged`);
+            return res.status(404).json({
+                success: false,
+                code: 'PASSWORD_NOT_STORED',
+                error: 'Сохранённый пароль не читается: ключ на сервере сменили. Задайте новый пароль, и его можно будет смотреть.',
+            });
+        }
         if (!password) {
             return res.status(404).json({
                 success: false,

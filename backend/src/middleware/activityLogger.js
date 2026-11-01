@@ -66,6 +66,7 @@ const ACTION_LABELS = {
     'add-to-group': 'Добавление в группу',
     'remove-from-group': 'Удаление из группы',
     'reset-password': 'Сброс пароля',
+    'reveal-password': 'Просмотр пароля',
     'add-member': 'Добавление в семью',
     'remove-member': 'Удаление из семьи',
 };

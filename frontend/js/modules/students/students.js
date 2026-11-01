@@ -506,6 +506,7 @@ function renderStudentIntegrationBlock(student) {
     const escapedCrmId = escapeHtml(crmId);
     const canManage = ['super_admin', 'admin', 'sales', 'sales_manager'].includes(getUserRole());
     const isLinked = status === 'linked' && student.appUserId;
+    const canRevealPassword = ['super_admin', 'admin'].includes(getUserRole());
     const canRebind = canManage && (isLinked || status === 'manual_review' || status === 'conflict');
     const statusCopy = STUDENT_LINK_STATUS_COPY[status] || STUDENT_LINK_STATUS_COPY.unlinked;
 
@@ -541,6 +542,7 @@ function renderStudentIntegrationBlock(student) {
             ${isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentInPlatform('${escapedCrmId}')">Открыть приложение</button>` : ''}
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-primary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'create')">Создать доступ</button>` : ''}
             ${canManage && !isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="linkStudentToPlatform('${escapedCrmId}')">Подключить найденный профиль</button>` : ''}
+            ${canRevealPassword ? `<button type="button" class="admin-btn btn-secondary" onclick="showStudentCurrentPassword('${escapedCrmId}', ${isLinked ? 'true' : 'false'})">Показать пароль</button>` : ''}
             ${canManage && isLinked ? `<button type="button" class="admin-btn btn-secondary" onclick="openStudentPlatformAccessDialog('${escapedCrmId}', 'reset')">Сменить пароль</button>` : ''}
             ${canRebind ? `<button type="button" class="admin-btn btn-secondary" onclick="rebindStudentToPlatform('${escapedCrmId}')">Переподключить профиль</button>` : ''}
             <button type="button" class="admin-btn btn-quiet" onclick="checkStudentPlatformLink('${escapedCrmId}')">Проверить доступ</button>
@@ -788,16 +790,55 @@ async function provisionStudentPlatform(studentId, password, mode = 'create', mo
     }
 }
 
-function showStudentPlatformCredentials(student, login, password, mode) {
+// Текущий пароль ученика из зашифрованной копии; просмотр пишется в журнал действий
+async function showStudentCurrentPassword(studentId, isLinked = false) {
+    try {
+        const response = await fetch(`${API_URL}/users/${encodeURIComponent(studentId)}/reveal-password`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+            cache: 'no-store',
+        });
+        const data = await response.json().catch(() => ({}));
+        const student = currentViewingStudentRecord && getStudentId(currentViewingStudentRecord) === String(studentId)
+            ? currentViewingStudentRecord
+            : { id: studentId, ...(data.user || {}) };
+        if (response.ok && data.success) {
+            const phoneDigits = String(student.phone || '').replace(/\D/g, '');
+            const login = phoneDigits ? `s_${phoneDigits}` : student.phone;
+            showStudentPlatformCredentials(student, login, data.password, 'view', data.setAt);
+            return;
+        }
+        if (data.code === 'PASSWORD_NOT_STORED' || data.code === 'PASSWORD_VAULT_DISABLED') {
+            const wantsNew = await customConfirm(`${data.error}\n\nЗадать новый пароль сейчас?`, { yesText: 'ЗАДАТЬ', noText: 'ОТМЕНА' });
+            if (!wantsNew) return;
+            if (isLinked) openStudentPlatformAccessDialog(studentId, 'reset');
+            else if (typeof openUserPasswordSetDialog === 'function') {
+                openUserPasswordSetDialog(studentId, formatStudentFio(student) || 'Ученик', student.phone || '', 'student');
+            }
+            return;
+        }
+        showToast(data.error || 'Не удалось получить пароль', 'error');
+    } catch (error) {
+        showToast('Не удалось получить пароль. Попробуйте позже.', 'error');
+    }
+}
+
+function showStudentPlatformCredentials(student, login, password, mode, setAt = null) {
     closeStudentPlatformModal('studentPlatformCredentialsModal');
     const platformUrl = 'https://maestro-school.duckdns.org/';
     const phoneDigitsRaw = String(student.phone || '').replace(/\D/g, '');
     const whatsappPhone = phoneDigitsRaw.startsWith('8')
         ? `7${phoneDigitsRaw.slice(1)}`
         : phoneDigitsRaw;
-    const intro = mode === 'reset'
-        ? 'Данные для входа в приложение Maestro обновлены.'
-        : 'Для вас создан доступ к приложению Maestro.';
+    const intro = mode === 'view'
+        ? 'Ваши данные для входа в приложение Maestro.'
+        : mode === 'reset'
+            ? 'Данные для входа в приложение Maestro обновлены.'
+            : 'Для вас создан доступ к приложению Maestro.';
+    const setAtDate = setAt ? new Date(setAt) : null;
+    const setAtText = setAtDate && !Number.isNaN(setAtDate.getTime())
+        ? setAtDate.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+        : '';
     const message = `Здравствуйте!\n\n${intro}\n\nСсылка: ${platformUrl}\nЛогин: ${login}\nПароль: ${password}\n\nСохраните эти данные для входа.`;
     const whatsappUrl = whatsappPhone
         ? `https://wa.me/${whatsappPhone}?text=${encodeURIComponent(message)}`
@@ -814,8 +855,8 @@ function showStudentPlatformCredentials(student, login, password, mode) {
         <div class="student-platform-modal__panel student-platform-modal__panel--credentials">
             <div class="student-platform-modal__header">
                 <div>
-                    <span class="student-platform-modal__eyebrow">Доступ готов</span>
-                    <h3 id="studentPlatformCredentialsTitle">${mode === 'reset' ? 'Пароль изменён' : 'Доступ создан'}</h3>
+                    <span class="student-platform-modal__eyebrow">${mode === 'view' ? 'Данные для входа' : 'Доступ готов'}</span>
+                    <h3 id="studentPlatformCredentialsTitle">${mode === 'view' ? 'Текущий пароль' : mode === 'reset' ? 'Пароль изменён' : 'Доступ создан'}</h3>
                 </div>
                 <button type="button" class="student-platform-modal__icon-btn" data-close-platform-modal aria-label="Закрыть" title="Закрыть">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -826,6 +867,7 @@ function showStudentPlatformCredentials(student, login, password, mode) {
                 <div><span>Логин</span><strong>${escapeHtml(login || '—')}</strong></div>
                 <div><span>Пароль</span><strong>${escapeHtml(password)}</strong></div>
             </div>
+            ${mode === 'view' ? `<p class="user-password-note">Пароль задан в CRM${setAtText ? ` ${escapeHtml(setAtText)}` : ''}. Если ученик сам менял пароль в приложении, этот может не подойти. Просмотр записан в журнал действий.</p>` : ''}
             <div class="student-platform-message">
                 <span>Готовое сообщение</span>
                 <pre>${escapeHtml(message)}</pre>

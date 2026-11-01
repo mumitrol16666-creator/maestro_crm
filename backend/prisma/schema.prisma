@@ -167,6 +167,9 @@ model Student {
   notifyPayments                     Boolean?
   email                              String?               @unique
   password                           String
+  // Encrypted copy for admins (services/passwordVault.js). Never returned by default, see config/db.js.
+  passwordEncrypted                  String?
+  passwordEncryptedAt                DateTime?
   sessionVersion                     Int                   @default(0)
   gender                             Gender?
   role                               Role                  @default(student)

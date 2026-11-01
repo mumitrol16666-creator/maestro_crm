@@ -16,7 +16,7 @@ const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticat
     // Never replay credentials or login results. These paths must execute their
     // own current-password, rate-limit and account checks on every request.
     if (/^\/api\/auth(?:\/|\?|$)/i.test(requestPath)
-        || /\/(?:sso-token|sso-exchange|reset-password|change-password|provision-platform|provision-all)(?:\/|\?|$)/i.test(requestPath)) return next();
+        || /\/(?:sso-token|sso-exchange|reset-password|reveal-password|platform-password|change-password|provision-platform|provision-all)(?:\/|\?|$)/i.test(requestPath)) return next();
     // Anonymous and worker/webhook requests retain their route-owned controls.
     if (!req.headers.authorization || /^\/api\/(?:internal|webhooks|qa)(?:\/|\?|$)/i.test(requestPath)) return next();
     const rawKey = req.headers['x-idempotency-key'] || req.headers['idempotency-key'];

@@ -2,7 +2,7 @@ const axios = require('axios');
 const { learningPlatformSecret } = require('./learningPlatformAuth');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
-const { passwordFields } = require('./passwordVault');
+const { passwordFields, NO_PASSWORD_COPY } = require('./passwordVault');
 const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { normalizePhoneDigits, phonesMatch } = require('../utils/phone');
@@ -796,6 +796,34 @@ async function syncPasswordToLearningPlatform(crmUserId, role, plainPassword) {
     }
 }
 
+// The user changed the password in the app. No password comes over: CRM forgets its copy,
+// unless an admin set a newer one after that change. Safe to repeat and to receive late.
+async function forgetPasswordCopyChangedInApp({ crmUserId, appUserId, changedAt }) {
+    const user = await prisma.student.findFirst({ where: { id: crmUserId, appUserId }, select: { id: true } });
+    if (!user) return { found: false, cleared: false };
+    const { count } = await prisma.student.updateMany({
+        where: { id: crmUserId, appUserId, passwordEncrypted: { not: null }, passwordEncryptedAt: { lte: changedAt } },
+        data: NO_PASSWORD_COPY,
+    });
+    return { found: true, cleared: count > 0 };
+}
+
+// When the user last changed the password in the app (null: never). Checked before a copy is shown,
+// so a lost notice from the app cannot leave an old password on screen.
+async function getAppPasswordChangedAt(student) {
+    try {
+        const response = await axios.get(`${learningPlatformBaseUrl()}/api/integration/v1/users/${encodeURIComponent(student.appUserId)}/session-state`, {
+            headers: integrationHeaders(), params: { crmUserId: student.id }, timeout: 10000,
+        });
+        const state = response.data?.data;
+        if (!response.data?.success || !state || !Object.hasOwn(state, 'passwordChangedInAppAt')) return { success: false };
+        if (state.passwordChangedInAppAt === null) return { success: true, changedAt: null };
+        const changedAt = new Date(state.passwordChangedInAppAt);
+        return Number.isNaN(changedAt.getTime()) ? { success: false } : { success: true, changedAt };
+    } catch {
+        return { success: false };
+    }
+}
 
 async function getCrmProfileByPhone(phone) {
     const digits = normalizePhoneDigits(phone);
@@ -840,5 +868,7 @@ module.exports = {
     selectCrmStudentForAppSync,
     getCrmProfileByPhone,
     syncPasswordToLearningPlatform,
+    forgetPasswordCopyChangedInApp,
+    getAppPasswordChangedAt,
     archiveCrmStudentAccess,
 };

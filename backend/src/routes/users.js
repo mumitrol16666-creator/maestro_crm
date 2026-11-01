@@ -8,7 +8,7 @@ const { passwordFields, openPassword, isPasswordVaultEnabled } = require('../ser
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
-const { provisionCrmTeacher, syncPasswordToLearningPlatform } = require('../services/userLink');
+const { provisionCrmTeacher, syncPasswordToLearningPlatform, getAppPasswordChangedAt, forgetPasswordCopyChangedInApp } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
 const { ensureTeacherScheduleColors, nextTeacherScheduleColor } = require('../services/scheduleAppearance');
 const { linkOpenBookingsForStudent } = require('../services/bookingStudentLink');
@@ -888,7 +888,7 @@ router.post('/:id/reveal-password', authenticate, requireAdmin, async (req, res)
         res.set('Cache-Control', 'no-store');
         const target = await prisma.student.findUnique({
             where: { id: req.params.id },
-            select: { id: true, role: true, name: true, lastName: true, middleName: true, phone: true, passwordEncrypted: true, passwordEncryptedAt: true },
+            select: { id: true, role: true, name: true, lastName: true, middleName: true, phone: true, appUserId: true, externalLinkStatus: true, passwordEncrypted: true, passwordEncryptedAt: true },
         });
         if (!target) {
             return res.status(404).json({ success: false, error: 'Пользователь не найден' });
@@ -907,6 +907,28 @@ router.post('/:id/reveal-password', authenticate, requireAdmin, async (req, res)
                 code: 'PASSWORD_NOT_STORED',
                 error: 'Сохранённый пароль не читается: ключ на сервере сменили. Задайте новый пароль, и его можно будет смотреть.',
             });
+        }
+        // The user may have changed the password in the app, and the notice may not have arrived yet.
+        if (target.appUserId && target.externalLinkStatus === 'linked') {
+            const app = await getAppPasswordChangedAt(target);
+            if (password && !app.success) {
+                return res.status(503).json({
+                    success: false,
+                    code: 'PASSWORD_APP_CHECK_FAILED',
+                    error: 'Не удалось проверить в приложении, не менял ли пользователь пароль. Повторите позже.',
+                });
+            }
+            if (app.success && app.changedAt && (!password || app.changedAt >= target.passwordEncryptedAt)) {
+                if (password) {
+                    await forgetPasswordCopyChangedInApp({ crmUserId: target.id, appUserId: target.appUserId, changedAt: app.changedAt });
+                }
+                return res.status(404).json({
+                    success: false,
+                    code: 'PASSWORD_CHANGED_IN_APP',
+                    changedAt: app.changedAt,
+                    error: 'Пользователь сам сменил пароль в приложении, CRM его не знает. Задайте новый пароль, и его можно будет смотреть.',
+                });
+            }
         }
         if (!password) {
             return res.status(404).json({

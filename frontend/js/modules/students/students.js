@@ -808,7 +808,7 @@ async function showStudentCurrentPassword(studentId, isLinked = false) {
             showStudentPlatformCredentials(student, login, data.password, 'view', data.setAt);
             return;
         }
-        if (data.code === 'PASSWORD_NOT_STORED' || data.code === 'PASSWORD_VAULT_DISABLED') {
+        if (['PASSWORD_NOT_STORED', 'PASSWORD_CHANGED_IN_APP', 'PASSWORD_VAULT_DISABLED'].includes(data.code)) {
             const wantsNew = await customConfirm(`${data.error}\n\nЗадать новый пароль сейчас?`, { yesText: 'ЗАДАТЬ', noText: 'ОТМЕНА' });
             if (!wantsNew) return;
             if (isLinked) openStudentPlatformAccessDialog(studentId, 'reset');

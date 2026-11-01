@@ -5,7 +5,7 @@ const { getTeacherRate, isPayableClass } = require('../services/salaryPolicy');
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
 const { createIntegrationAuditMiddleware } = require('../services/integrationJournal');
 const { buildCrmIntegrationSnapshot } = require('../services/integrationReconciliation');
-const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPhone } = require('../services/userLink');
+const { getLinkStatus, linkUsers, syncFromApp, createSsoToken, getCrmProfileByPhone, forgetPasswordCopyChangedInApp } = require('../services/userLink');
 const {
     getTeacherOfflineClasses,
     getTeacherStudents,
@@ -620,6 +620,27 @@ router.post('/users/sync-from-app', async (req, res) => {
     } catch (error) {
         console.error('[integration] sync-from-app error:', error);
         return res.status(500).json({ success: false, error: 'Sync failed' });
+    }
+});
+
+// POST /api/integration/v1/users/password-changed-in-app — the user changed the password in the app.
+// Only the fact and its time arrive; CRM forgets its copy so the admin never sees an old password.
+router.post('/users/password-changed-in-app', async (req, res) => {
+    if (!requireLearningPlatform(req, res)) return;
+    try {
+        const { appUserId, crmUserId, changedAt } = req.body || {};
+        const at = typeof changedAt === 'string' ? new Date(changedAt) : null;
+        if (typeof appUserId !== 'string' || !appUserId || typeof crmUserId !== 'string' || !crmUserId || !at || Number.isNaN(at.getTime())) {
+            return res.status(400).json({ success: false, error: 'appUserId, crmUserId and changedAt are required' });
+        }
+        const result = await forgetPasswordCopyChangedInApp({ crmUserId, appUserId, changedAt: at });
+        if (!result.found) {
+            return res.status(404).json({ success: false, error: 'CRM user with this app account not found' });
+        }
+        return res.json({ success: true, data: { cleared: result.cleared } });
+    } catch (error) {
+        console.error('[integration] password-changed-in-app error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to record the password change' });
     }
 });
 

@@ -597,7 +597,7 @@ async function openUserPassword(userId, userName, userPhone, userRole = '') {
             });
             return;
         }
-        if (result.data?.code === 'PASSWORD_NOT_STORED' || result.data?.code === 'PASSWORD_VAULT_DISABLED') {
+        if (['PASSWORD_NOT_STORED', 'PASSWORD_CHANGED_IN_APP', 'PASSWORD_VAULT_DISABLED'].includes(result.data?.code)) {
             openUserPasswordSetDialog(userId, userName, userPhone, userRole, result.data.error);
             return;
         }

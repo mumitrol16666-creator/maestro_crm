@@ -68,6 +68,7 @@ function requiredPermissions(req, targetRole) {
         if (req.method === 'DELETE') add('canDeleteUsers');
         if (req.method === 'POST' && (!parts[3] || ['teachers', 'admins', 'sales-managers', 'staff'].includes(parts[3]) && !parts[4])) add('canCreateUsers');
         if (action === 'change-role') add('canEditRoles');
+        if (['reveal-password', 'reset-password'].includes(action)) add('canCreateUsers');
     }
     if (resource === 'directions') add('canManageDirections');
     if (resource === 'rooms') add('canManageSchedule');

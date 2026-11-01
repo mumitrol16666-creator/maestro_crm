@@ -136,3 +136,26 @@ test('ответ отправляется только после сохране
     assert.equal(saved, true);
     assert.deepEqual(response.body, { success: true });
 });
+
+test('кеш повторных запросов не хранит пароли открытым текстом', async () => {
+    const stored = new Map();
+    const db = {
+        idempotencyKey: {
+            findUnique: async ({ where }) => stored.get(where.key) || null,
+            create: async ({ data }) => { stored.set(data.key, { ...data, responseStatus: null, responseBody: null }); },
+            update: async ({ where, data }) => { stored.set(where.key, { ...stored.get(where.key), ...data }); },
+            delete: async ({ where }) => stored.delete(where.key),
+        },
+    };
+    const middleware = createIdempotencyMiddleware(db, authenticateFixture);
+    const request = { ...makeRequest('create-admin'), originalUrl: '/api/users/admins' };
+    const response = createResponse();
+    await middleware(request, response, () => {
+        response.status(201).json({ success: true, user: { id: 'u1' }, generatedPassword: 'Plain-Secret-1' });
+    });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(response.body.generatedPassword, 'Plain-Secret-1');
+    const cached = [...stored.values()].map(row => row.responseBody).join('');
+    assert.ok(cached.length > 0);
+    assert.ok(!cached.includes('Plain-Secret-1'));
+});

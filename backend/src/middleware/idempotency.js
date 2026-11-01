@@ -1,5 +1,6 @@
 const { prisma } = require('../config/db');
 const crypto = require('crypto');
+const { sanitizeForAudit } = require('../utils/auditSanitizer');
 const { authenticate } = require('./auth');
 const { requireIntegrationAuth } = require('./integrationAuth');
 
@@ -95,7 +96,8 @@ const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticat
                 if (typeof body === 'string') {
                     bodyStr = body;
                 } else if (body !== undefined) {
-                    bodyStr = JSON.stringify(body);
+                    // A replay gets '***' instead of a generated password: it is not kept in the cache.
+                    bodyStr = JSON.stringify(sanitizeForAudit(body));
                 }
                 await db.idempotencyKey.update({
                     where: { key },

@@ -17,6 +17,7 @@ const cases = [
  ['POST','/api/classes/id/reopen','canManagePayments'], ['POST','/api/classes/id/postpone','canManagePayments'],
  ['POST','/api/students/id/balance-adjustment','canManagePayments'], ['POST','/api/memberships','canManagePayments'],
  ['PUT','/api/salary/id/pay','canManagePayments'], ['POST','/api/directions','canManageDirections'],
+ ['POST','/api/users/id/reveal-password','canCreateUsers'], ['POST','/api/users/id/reset-password','canCreateUsers'],
 ];
 test('permission aliases include side effects; malformed grants deny, omitted legacy flags preserve route ceiling', () => {
  for (const [method, originalUrl, key] of cases) assert.ok(requiredPermissions({ method, originalUrl }).includes(key), `${method} ${originalUrl}: ${key}`);

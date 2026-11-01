@@ -17,6 +17,8 @@ const PRIVATE_DATA_KEYS = new Set([
     'recipientPhone',
 ]);
 
+const REDACTED_MARKER = '[скрыто]';
+
 function redact(value) {
     if (value === null || value === undefined) return value;
     if (Array.isArray(value)) return value.map(redact);
@@ -35,7 +37,7 @@ function redact(value) {
         const isPrivateData = PRIVATE_DATA_KEYS.has(key)
             || normalizedKey.endsWith('phone')
             || normalizedKey.endsWith('email');
-        acc[key] = isSensitive || isPrivateData ? '[скрыто]' : redact(item);
+        acc[key] = isSensitive || isPrivateData ? REDACTED_MARKER : redact(item);
         return acc;
     }, {});
 }
@@ -65,6 +67,7 @@ function isRetryableStatus(status) {
 }
 
 module.exports = {
+    REDACTED_MARKER,
     inboundResponseForAudit,
     isRetryableStatus,
     redact,

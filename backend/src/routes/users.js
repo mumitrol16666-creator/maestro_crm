@@ -3,7 +3,8 @@ const router = express.Router();
 const { buildUserDirectoryWhere } = require('../services/userDirectory');
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
-const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
+const { passwordFields, openPassword, isPasswordVaultEnabled } = require('../services/passwordVault');
 const fs = require('fs');
 const path = require('path');
 const multer = require('multer');
@@ -168,7 +169,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const passwordData = await passwordFields(password);
         const assignedScheduleColor = normalizeColor(scheduleColor, await nextTeacherScheduleColor(phone));
         const salaryRates = {};
         if (!applySalaryRates(salaryRates, { salaryIndividual, salaryGroup, salaryOther })) {
@@ -185,7 +186,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
         const user = await prisma.student.create({
             data: {
                 name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
-                password: hashedPassword, role: 'teacher',
+                ...passwordData, role: 'teacher',
                 gender: gender === 'female' ? 'female' : 'male',
                 teacherDirections: directions || [],
                 teacherBio: bio || '',
@@ -366,7 +367,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const passwordData = await passwordFields(password);
         const payrollData = {};
         const payrollError = applyStaffPayrollSettings(payrollData, {
             staffPosition: staffPosition || 'Администратор',
@@ -379,7 +380,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
         const user = await prisma.student.create({
             data: {
                 name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
-                password: hashedPassword, role: 'admin',
+                ...passwordData, role: 'admin',
                 gender: gender === 'female' ? 'female' : 'male',
                 ...payrollData,
             }
@@ -435,7 +436,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const passwordData = await passwordFields(password);
         const payrollData = {};
         const payrollError = applyStaffPayrollSettings(payrollData, {
             staffPosition: staffPosition || 'Менеджер по продажам',
@@ -448,7 +449,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
         const user = await prisma.student.create({
             data: {
                 name, lastName, middleName: middleName || null, phone, phoneDigits: phone.replace(/\D/g, ''),
-                password: hashedPassword, role: 'sales_manager',
+                ...passwordData, role: 'sales_manager',
                 gender: gender === 'female' ? 'female' : 'male',
                 ...payrollData,
             }
@@ -502,7 +503,7 @@ router.post('/staff', authenticate, requireAdmin, async (req, res) => {
                 middleName: middleName || null,
                 phone,
                 phoneDigits: phone.replace(/\D/g, ''),
-                password: await bcrypt.hash(password, 10),
+                ...(await passwordFields(password)),
                 role: 'staff',
                 gender: gender === 'female' ? 'female' : 'male',
                 ...payrollData,
@@ -651,7 +652,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
         const existing = await prisma.student.findFirst({ where: { phone } });
         if (existing) return res.status(400).json({ success: false, error: 'Пользователь с таким телефоном уже существует' });
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const passwordData = await passwordFields(password);
         const assignedTeacherColor = role === 'teacher'
             ? normalizeColor(teacherScheduleColor, await nextTeacherScheduleColor(phone))
             : null;
@@ -673,7 +674,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 middleName: middleName || null,
                 phone,
                 phoneDigits: phone.replace(/\D/g, ''),
-                password: hashedPassword,
+                ...passwordData,
                 role,
                 email: email || null,
                 teacherDirections: teacherDirections || [],
@@ -786,7 +787,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
                 if (payrollError) return res.status(400).json({ success: false, error: payrollError });
             }
         }
-        if (password) data.password = await bcrypt.hash(password, 10);
+        if (password) Object.assign(data, await passwordFields(password));
 
         const user = await prisma.student.update({ where: {
             id: req.params.id, role: currentUser.role, phone: currentUser.phone, status: currentUser.status,
@@ -819,9 +820,27 @@ router.patch('/:id/change-role', authenticate, requireSuperAdmin, async (req, re
     }
 });
 
-// POST /api/users/:id/reset-password
+// Admins see and reset passwords of non-admins; only a super admin does it for admins.
+function canManagePasswordOf(actor, targetRole) {
+    return actor.role === 'super_admin' || !['admin', 'super_admin'].includes(targetRole);
+}
+
+function generateResetPassword() {
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let value = '';
+    for (let i = 0; i < 8; i++) value += chars.charAt(crypto.randomInt(chars.length));
+    return value;
+}
+
+// POST /api/users/:id/reset-password — new password: the admin's own (body.password) or a generated one
 router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) => {
     try {
+        const requested = req.body?.password;
+        if (requested !== undefined && requested !== null && requested !== '') {
+            if (typeof requested !== 'string' || requested.length < 8 || Buffer.byteLength(requested, 'utf8') > 72 || /[\r\n\0]/.test(requested)) {
+                return res.status(400).json({ success: false, error: 'Пароль должен содержать от 8 символов и не больше 72 байт, без переводов строки' });
+            }
+        }
         const targetUser = await prisma.student.findUnique({
             where: { id: req.params.id },
             select: { id: true, role: true, appUserId: true, externalLinkStatus: true }
@@ -829,32 +848,74 @@ router.post('/:id/reset-password', authenticate, requireAdmin, async (req, res) 
         if (!targetUser) {
             return res.status(404).json({ success: false, error: 'Пользователь не найден' });
         }
-        if (req.user.role !== 'super_admin' && ['admin', 'super_admin'].includes(targetUser.role)) {
+        if (!canManagePasswordOf(req.user, targetUser.role)) {
             return res.status(403).json({
                 success: false,
                 error: 'Сброс пароля администратора доступен только супер-администратору'
             });
         }
 
-        const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-        let newPassword = '';
-        for (let i = 0; i < 8; i++) newPassword += chars.charAt(Math.floor(Math.random() * chars.length));
+        const newPassword = typeof requested === 'string' && requested ? requested : generateResetPassword();
+        const student = await prisma.student.update({ where: { id: req.params.id, role: targetUser.role }, data: await passwordFields(newPassword) });
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
-        const student = await prisma.student.update({ where: { id: req.params.id, role: targetUser.role }, data: { password: hashedPassword } });
-
-        // Если ученик привязан к Learning Platform, отправляем туда новый пароль
+        // Если пользователь привязан к Learning Platform, отправляем туда новый пароль
+        let platformSynced = null;
         if (student.appUserId && student.externalLinkStatus === 'linked') {
-            await syncPasswordToLearningPlatform(student.id, student.role, newPassword);
+            const sync = await syncPasswordToLearningPlatform(student.id, student.role, newPassword);
+            platformSynced = Boolean(sync?.success);
         }
 
-        res.json({ success: true, newPassword });
+        res.set('Cache-Control', 'no-store');
+        res.json({
+            success: true,
+            newPassword,
+            platformSynced,
+            ...(platformSynced === false ? { warning: 'Пароль изменён в CRM, но приложение его не приняло. В приложении действует старый пароль.' } : {}),
+        });
     } catch (error) {
         console.error('Reset password error:', error);
         if (error.code === 'P2025') {
             return res.status(409).json({ success: false, error: 'Роль пользователя изменилась. Обновите карточку и повторите действие.' });
         }
         res.status(500).json({ success: false, error: 'Ошибка сброса пароля' });
+    }
+});
+
+// POST /api/users/:id/reveal-password — current password from the encrypted copy.
+// POST, not GET: every look is written to the activity log; the response is never cached.
+router.post('/:id/reveal-password', authenticate, requireAdmin, async (req, res) => {
+    try {
+        res.set('Cache-Control', 'no-store');
+        const target = await prisma.student.findUnique({
+            where: { id: req.params.id },
+            select: { id: true, role: true, name: true, lastName: true, middleName: true, phone: true, passwordEncrypted: true, passwordEncryptedAt: true },
+        });
+        if (!target) {
+            return res.status(404).json({ success: false, error: 'Пользователь не найден' });
+        }
+        if (!canManagePasswordOf(req.user, target.role)) {
+            return res.status(403).json({ success: false, error: 'Пароль администратора может посмотреть только супер-администратор' });
+        }
+        if (!isPasswordVaultEnabled()) {
+            return res.status(503).json({ success: false, code: 'PASSWORD_VAULT_DISABLED', error: 'Просмотр паролей не включён на сервере' });
+        }
+        const password = target.passwordEncrypted ? openPassword(target.passwordEncrypted) : null;
+        if (!password) {
+            return res.status(404).json({
+                success: false,
+                code: 'PASSWORD_NOT_STORED',
+                error: 'Пароль не сохранён: он задан до включения просмотра. Задайте новый пароль, и его можно будет смотреть.',
+            });
+        }
+        res.json({
+            success: true,
+            password,
+            setAt: target.passwordEncryptedAt,
+            user: { id: target.id, role: target.role, name: target.name, lastName: target.lastName, middleName: target.middleName, phone: target.phone },
+        });
+    } catch (error) {
+        console.error('Reveal password error:', error);
+        res.status(500).json({ success: false, error: 'Не удалось получить пароль' });
     }
 });
 

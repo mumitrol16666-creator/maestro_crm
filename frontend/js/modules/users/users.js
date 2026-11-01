@@ -189,7 +189,7 @@ async function renderUsers(roleFilter = 'all', search = '', page = 1) {
                         ${user.role === 'student' ? `
                         <button class="table-btn" onclick="viewStudent(${jsUserArg(user._id)})">Карточка</button>
                         ` : `
-                        <button class="table-btn" onclick="resetUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)}, ${jsUserArg(user.role)})">
+                        <button class="table-btn" onclick="openUserPassword(${jsUserArg(user._id)}, ${jsUserArg(userFio)}, ${jsUserArg(user.phone)}, ${jsUserArg(user.role)})">
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display: inline-block; vertical-align: middle; margin-right: 4px;">
                                 <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                                 <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
@@ -560,48 +560,150 @@ async function deleteUser(userId, userName, userRole) {
 
 // Генерация случайного пароля
 function generatePassword() {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let password = '';
-    for (let i = 0; i < 8; i++) {
-        password += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return password;
+    const chars = 'abcdefghijkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    const values = new Uint32Array(8);
+    if (window.crypto?.getRandomValues) window.crypto.getRandomValues(values);
+    else for (let i = 0; i < values.length; i++) values[i] = Math.floor(Math.random() * chars.length);
+    return Array.from(values, value => chars[value % chars.length]).join('');
 }
 
-// Сброс пароля пользователя
-async function resetUserPassword(userId, userName, userPhone, userRole = '') {
-    const confirmMsg = `Сгенерировать новый пароль для "${userName}"?\n\nТелефон: ${userPhone}\n\nНовый пароль будет показан вам для передачи ученику.`;
+function formatPasswordSetAt(value) {
+    if (!value) return '';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+}
 
-    if (!await customConfirm(confirmMsg)) {
-        return;
-    }
+// Текущий пароль пользователя: каждый просмотр пишется в журнал действий
+async function revealUserPassword(userId) {
+    const response = await fetch(`${API_URL}/users/${encodeURIComponent(userId)}/reveal-password`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+        cache: 'no-store',
+    });
+    const data = await response.json().catch(() => ({}));
+    return { ok: response.ok && data.success, status: response.status, data };
+}
 
+// Кнопка «Пароль»: показать текущий, а если его нет — сразу задать новый
+async function openUserPassword(userId, userName, userPhone, userRole = '') {
     try {
-        const token = getAuthToken();
-        const response = await fetch(`${API_URL}/users/${userId}/reset-password`, {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`,
-                'Content-Type': 'application/json'
-            }
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            const password = data.newPassword;
-            const copySuccess = await copyToClipboard(password);
-            showPasswordModal(userName, userPhone, password, copySuccess, '', userRole);
-        } else {
-            toast.error(data.error || 'Не удалось сбросить пароль');
+        const result = await revealUserPassword(userId);
+        if (result.ok) {
+            showPasswordModal(userName, userPhone, result.data.password, false, '', userRole, {
+                mode: 'view',
+                setAt: result.data.setAt,
+                onChange: () => openUserPasswordSetDialog(userId, userName, userPhone, userRole),
+            });
+            return;
         }
+        if (result.data?.code === 'PASSWORD_NOT_STORED' || result.data?.code === 'PASSWORD_VAULT_DISABLED') {
+            openUserPasswordSetDialog(userId, userName, userPhone, userRole, result.data.error);
+            return;
+        }
+        toast.error(result.data?.error || 'Не удалось получить пароль');
     } catch (error) {
-        toast.error('Не удалось сбросить пароль');
+        toast.error('Не удалось получить пароль');
     }
+}
+
+// Задать пароль: свой или сгенерированный
+function openUserPasswordSetDialog(userId, userName, userPhone, userRole = '', note = '') {
+    document.getElementById('userPasswordSetModal')?.remove();
+    const modal = document.createElement('div');
+    modal.id = 'userPasswordSetModal';
+    modal.className = 'student-platform-modal';
+    modal.setAttribute('role', 'dialog');
+    modal.setAttribute('aria-modal', 'true');
+    modal.setAttribute('aria-labelledby', 'userPasswordSetTitle');
+    modal.innerHTML = `
+        <div class="student-platform-modal__backdrop" data-close-user-password></div>
+        <form class="student-platform-modal__panel" id="userPasswordSetForm">
+            <div class="student-platform-modal__header">
+                <div>
+                    <span class="student-platform-modal__eyebrow">Пароль для входа</span>
+                    <h3 id="userPasswordSetTitle">Задать новый пароль</h3>
+                </div>
+                <button type="button" class="student-platform-modal__icon-btn" data-close-user-password aria-label="Закрыть" title="Закрыть">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 6 12 12M18 6 6 18"/></svg>
+                </button>
+            </div>
+            <p class="student-platform-modal__student">${escapeUserText(userName)} · ${escapeUserText(userPhone)}</p>
+            ${note ? `<p class="user-password-note">${escapeUserText(note)}</p>` : ''}
+            <label class="student-platform-password">
+                <span>Новый пароль</span>
+                <div class="student-platform-password__control">
+                    <input id="userPasswordSetInput" type="text" minlength="8" maxlength="72"
+                        value="${escapeUserText(generatePassword())}" autocomplete="new-password" spellcheck="false" required>
+                    <button type="button" id="userPasswordSetGenerate" class="student-platform-modal__icon-btn"
+                        aria-label="Сгенерировать пароль" title="Сгенерировать пароль">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v6h-6"/></svg>
+                    </button>
+                </div>
+                <small>Минимум 8 символов. Впишите свой или оставьте сгенерированный. Старый пароль перестанет работать.</small>
+            </label>
+            <div id="userPasswordSetError" class="student-platform-modal__error" aria-live="polite"></div>
+            <div class="student-platform-modal__actions">
+                <button type="button" class="admin-btn btn-secondary" data-close-user-password>Отмена</button>
+                <button type="submit" class="admin-btn btn-primary" id="userPasswordSetSubmit">Сохранить пароль</button>
+            </div>
+        </form>
+    `;
+    document.body.appendChild(modal);
+    const input = modal.querySelector('#userPasswordSetInput');
+    const errorEl = modal.querySelector('#userPasswordSetError');
+    const submit = modal.querySelector('#userPasswordSetSubmit');
+    modal.querySelectorAll('[data-close-user-password]').forEach(button => button.addEventListener('click', () => modal.remove()));
+    modal.querySelector('#userPasswordSetGenerate').addEventListener('click', () => {
+        input.value = generatePassword();
+        input.focus();
+        input.select();
+    });
+    modal.querySelector('#userPasswordSetForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const password = input.value;
+        if (password.length < 8 || new TextEncoder().encode(password).length > 72 || /[\r\n]/.test(password)) {
+            errorEl.textContent = 'Пароль должен содержать от 8 символов и не больше 72 байт';
+            return;
+        }
+        submit.disabled = true;
+        submit.textContent = 'Сохранение...';
+        try {
+            const response = await fetch(`${API_URL}/users/${encodeURIComponent(userId)}/reset-password`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok || !data.success) {
+                errorEl.textContent = data.error || 'Не удалось сохранить пароль';
+                return;
+            }
+            modal.remove();
+            if (data.warning) toast.error(data.warning);
+            const copySuccess = await copyToClipboard(data.newPassword);
+            showPasswordModal(userName, userPhone, data.newPassword, copySuccess, '', userRole);
+        } catch (error) {
+            errorEl.textContent = 'Не удалось сохранить пароль. Попробуйте позже.';
+        } finally {
+            if (submit.isConnected) {
+                submit.disabled = false;
+                submit.textContent = 'Сохранить пароль';
+            }
+        }
+    });
+    requestAnimationFrame(() => { input.focus(); input.select(); });
+}
+
+// Совместимость со старыми вызовами: сброс теперь идёт через окно с выбором пароля
+function resetUserPassword(userId, userName, userPhone, userRole = '') {
+    openUserPasswordSetDialog(userId, userName, userPhone, userRole);
 }
 
 // Показать модальное окно с новым паролем
-function showPasswordModal(userName, userPhone, password, copySuccess, userType = '', userRole = '') {
+function showPasswordModal(userName, userPhone, password, copySuccess, userType = '', userRole = '', options = {}) {
+    const isView = options.mode === 'view';
+    const setAtText = isView ? formatPasswordSetAt(options.setAt) : '';
     const modal = document.createElement('div');
     modal.style.cssText = `
         position: fixed;
@@ -616,15 +718,15 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
         z-index: 10002;
     `;
 
-    const title = userType ? `${userType.toUpperCase()} СОЗДАН` : 'НОВЫЙ ПАРОЛЬ СОЗДАН';
+    const title = isView ? 'ТЕКУЩИЙ ПАРОЛЬ' : (userType ? `${userType.toUpperCase()} СОЗДАН` : 'НОВЫЙ ПАРОЛЬ СОЗДАН');
     const platformUrl = 'https://maestro-school.duckdns.org/';
     const phoneDigits = String(userPhone || '').replace(/\D/g, '');
     const isStudent = userRole === 'student';
     const platformLogin = isStudent && phoneDigits ? `s_${phoneDigits}` : userPhone;
     const paymentLoginLine = isStudent ? `\nКабинет оплаты: ${userPhone}` : '';
-    const messageIntro = userType
-        ? 'Ваш аккаунт успешно создан.'
-        : 'Ваш пароль успешно обновлен.';
+    const messageIntro = isView
+        ? 'Ваши данные для входа.'
+        : (userType ? 'Ваш аккаунт успешно создан.' : 'Ваш пароль успешно обновлен.');
     const whatsappMessage = `${messageIntro}
 
 Данные для входа:
@@ -712,12 +814,18 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                     ${getIcon('warning', 20)}
                     <span>ВАЖНО:</span>
                 </div>
+                ${isView ? `
+                <ol style="color: var(--admin-text); margin: 0; padding-left: 20px; line-height: 1.8;">
+                    <li>Пароль задан в CRM${setAtText ? ` ${escapeUserText(setAtText)}` : ''}</li>
+                    <li>Если пользователь сам менял пароль в приложении, этот может не подойти. Тогда задайте новый</li>
+                    <li>Просмотр записан в журнал действий</li>
+                </ol>` : `
                 <ol style="color: var(--admin-text); margin: 0; padding-left: 20px; line-height: 1.8;">
                     <li>Скопируйте готовое сообщение или откройте WhatsApp</li>
                     <li>Передайте пользователю новый логин, пароль и адрес сайта</li>
-                    <li>Это окно больше не появится!</li>
+                    <li>Пароль можно посмотреть снова кнопкой «Пароль»</li>
                     <li>Пользователь может сменить пароль в профиле</li>
-                </ol>
+                </ol>`}
             </div>
 
             <div style="background: rgba(16, 185, 129, 0.1); border-left: 3px solid #10b981; padding: 15px; margin-bottom: 25px; border-radius: 4px;">
@@ -768,6 +876,16 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
                     font-size: 0.9rem;
                     transition: all 0.3s ease;
                 ">СКОПИРОВАТЬ ПАРОЛЬ</button>
+                ${isView && typeof options.onChange === 'function' ? `<button id="changePasswordFromView" style="
+                    padding: 12px 30px;
+                    background: transparent;
+                    color: var(--admin-text);
+                    border: 2px solid var(--admin-border);
+                    cursor: pointer;
+                    letter-spacing: 0.1em;
+                    font-size: 0.9rem;
+                    transition: all 0.3s ease;
+                ">СМЕНИТЬ ПАРОЛЬ</button>` : ''}
                 <button id="closePasswordModal" style="
                     padding: 12px 30px;
                     background: transparent;
@@ -805,6 +923,11 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
         } else {
             toast.error('Не удалось скопировать. Скопируйте вручную.');
         }
+    });
+
+    document.getElementById('changePasswordFromView')?.addEventListener('click', () => {
+        modal.remove();
+        options.onChange();
     });
 
     document.getElementById('closePasswordModal').addEventListener('click', () => {

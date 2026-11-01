@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { signSession } = require('../utils/sessionVersion');
 const bcrypt = require('bcryptjs');
+const { passwordFields } = require('../services/passwordVault');
 const { prisma } = require('../config/db');
 const { authenticate, requireSuperAdmin } = require('../middleware/auth');
 const { isActiveCrmAccount } = require('../utils/accountStatus');
@@ -100,7 +101,7 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
 
         await ensureStudentContactPhoneAvailable(prisma, phone);
 
-        const hashedPassword = await bcrypt.hash(password, 10);
+        const passwordData = await passwordFields(password);
 
         const user = await prisma.student.create({
             data: {
@@ -108,7 +109,7 @@ router.post('/register', authenticate, requireSuperAdmin, async (req, res) => {
                 lastName,
                 phone,
                 phoneDigits: phone.replace(/\D/g, ''),
-                password: hashedPassword,
+                ...passwordData,
                 gender: gender === 'male' ? 'male' : 'female',
                 email: email || null,
                 role: 'student'
@@ -161,11 +162,11 @@ router.patch('/change-password', authenticate, async (req, res) => {
             return res.status(401).json({ success: false, error: 'Неверный текущий пароль' });
         }
 
-        const hashedPassword = await bcrypt.hash(newPassword, 10);
+        const passwordData = await passwordFields(newPassword);
 
         const updated = await prisma.student.update({
             where: { id: req.user.id },
-            data: { password: hashedPassword }
+            data: passwordData
         });
 
         // Если ученик привязан к Learning Platform, отправляем туда новый пароль

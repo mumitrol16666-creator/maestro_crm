@@ -58,6 +58,7 @@ const ACTIVITY_ACTION_LABELS = {
     'add-to-group': { text: 'Добавлен в группу', color: '#10b981' },
     'remove-from-group': { text: 'Удалён из группы', color: '#f59e0b' },
     'reset-password': { text: 'Сброс пароля', color: '#f59e0b' },
+    'reveal-password': { text: 'Просмотр пароля', color: '#f59e0b' },
     sent: { text: 'Рассылка', color: '#25d366' },
     schedule: { text: 'Изменил расписание', color: '#f59e0b' },
 };

@@ -4,6 +4,7 @@ const SENSITIVE_AUDIT_KEYS = new Set([
     'newpassword',
     'confirmpassword',
     'generatedpassword',
+    'passwordencrypted',
     'passphrase',
     'token',
     'accesstoken',

@@ -10421,6 +10421,17 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
     background: color-mix(in srgb, var(--ops-danger) 16%, transparent);
 }
 
+.user-password-note {
+    margin: 0 0 14px;
+    padding: 10px 12px;
+    border-left: 3px solid #f59e0b;
+    background: rgba(245, 158, 11, 0.1);
+    color: var(--admin-text);
+    font-size: 0.85rem;
+    line-height: 1.5;
+    border-radius: 4px;
+}
+
 .student-platform-modal__error {
     min-height: 20px;
     margin-top: 10px;

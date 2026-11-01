@@ -11,7 +11,7 @@ function parseOptionalDate(value) {
 const { body, validationResult } = require('express-validator');
 const { prisma } = require('../config/db');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
-const bcrypt = require('bcryptjs');
+const { passwordFields } = require('../services/passwordVault');
 const { notify } = require('../services/notifications');
 const { provisionCrmStudent } = require('../services/userLink');
 const { ensureStudentContactPhoneAvailable } = require('../services/studentPhonePolicy');
@@ -1151,7 +1151,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
         const { referrerStudentId: bodyReferrerStudentId } = req.body;
 
         const generatedPassword = req.body.password || Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+        const passwordData = await passwordFields(generatedPassword);
 
         // Реферер: из тела запроса имеет приоритет над сохранённым в заявке
         let refStudentId = booking.referrerStudentId || null;
@@ -1180,7 +1180,7 @@ router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) 
                     dateOfBirth: booking.dateOfBirth || null,
                     phone: booking.phone || '',
                     phoneDigits: phoneDigits(booking.phone),
-                    password: hashedPassword,
+                    ...passwordData,
                     // Gender is profile data. It is filled in from the student card,
                     // not while choosing a membership.
                     gender: null,

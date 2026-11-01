@@ -1,4 +1,4 @@
-const bcrypt = require('bcryptjs');
+const { passwordFields } = require('./passwordVault');
 const { normalizePhoneDigits } = require('../utils/phone');
 
 function commandError(message) {
@@ -28,7 +28,7 @@ function parseAdminPassword(input) {
 }
 
 async function maintainAdminAccount(db, mode, target, password) {
-    const passwordHash = await bcrypt.hash(password, 10);
+    const passwordData = await passwordFields(password);
     return db.$transaction(async tx => {
         if (mode === 'create') {
             await tx.$queryRaw`SELECT pg_advisory_xact_lock(hashtextextended(${`admin-bootstrap:${target}`}, 0)) IS NULL AS locked`;
@@ -36,7 +36,7 @@ async function maintainAdminAccount(db, mode, target, password) {
             if (people.some(p => normalizePhoneDigits(p.phone) === target || normalizePhoneDigits(p.phoneDigits) === target)) {
                 throw commandError('Этот телефон уже используется. Создание не меняет пароль или роль существующих пользователей.');
             }
-            return tx.student.create({ data: { phone: `+${target}`, phoneDigits: target, password: passwordHash,
+            return tx.student.create({ data: { phone: `+${target}`, phoneDigits: target, ...passwordData,
                 role: 'super_admin', name: 'Администратор', lastName: 'Maestro', status: 'active' }, select: { id: true } });
         }
         const user = await tx.student.findUnique({ where: { id: target }, select: { id: true, role: true, status: true, password: true } });
@@ -44,7 +44,7 @@ async function maintainAdminAccount(db, mode, target, password) {
             throw commandError('Указанный ID не принадлежит действующему администратору. Роль и статус не менялись.');
         }
         return tx.student.update({ where: { id: user.id, role: user.role, status: user.status, password: user.password },
-            data: { password: passwordHash }, select: { id: true } });
+            data: passwordData, select: { id: true } });
     });
 }
 

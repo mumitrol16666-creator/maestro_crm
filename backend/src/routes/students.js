@@ -31,7 +31,7 @@ const {
 const { getStudentRegularSchedule, updateStudentRegularSchedule } = require('../services/studentSchedule');
 const { estimateLessonsFromBalance, getMembershipLessonPrice } = require('../utils/membershipBalance');
 const { loadBalanceCoverageForStudents } = require('../services/balanceCoverage');
-const bcrypt = require('bcryptjs');
+const { passwordFields } = require('../services/passwordVault');
 const { LOST_STUDENT_MONTHS, getLostThresholdDate } = require('../utils/students');
 const {
     DEPARTURE_REASONS,
@@ -720,7 +720,7 @@ router.post('/:id/platform-password', authenticate, requireSalesOrAdmin, async (
 
         await prisma.student.update({
             where: { id: student.id },
-            data: { password: await bcrypt.hash(password, 10) },
+            data: await passwordFields(password),
         });
 
         return res.json({
@@ -1520,11 +1520,11 @@ router.post('/', authenticate, requireSalesOrAdmin, async (req, res) => {
         await ensureStudentContactPhoneAvailable(prisma, phone);
 
         const pwd = password || Math.random().toString(36).slice(-8);
-        const hashedPassword = await bcrypt.hash(pwd, 10);
+        const passwordData = await passwordFields(pwd);
 
         const student = await prisma.$transaction(async tx => {
             const created = await tx.student.create({
-                data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, password: hashedPassword, role: 'student' }
+                data: { name, lastName, middleName: middleName || null, dateOfBirth: parsedDateOfBirth || null, phone, phoneDigits: phone.replace(/\D/g, ''), gender: gender || null, email: email || null, notes, ...passwordData, role: 'student' }
             });
             if (groupId) {
                 await tx.studentGroup.create({ data: { studentId: created.id, groupId, status: 'active' } });

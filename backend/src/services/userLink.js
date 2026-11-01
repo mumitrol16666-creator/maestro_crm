@@ -2,6 +2,7 @@ const axios = require('axios');
 const { learningPlatformSecret } = require('./learningPlatformAuth');
 const jwt = require('jsonwebtoken');
 const bcrypt = require('bcryptjs');
+const { passwordFields } = require('./passwordVault');
 const crypto = require('crypto');
 const { prisma } = require('../config/db');
 const { normalizePhoneDigits, phonesMatch } = require('../utils/phone');
@@ -626,7 +627,7 @@ async function provisionCrmStudent(crmStudentId, options = {}) {
             appUserId,
             externalLinkStatus: 'linked',
             linkedAt: new Date(),
-            ...(options.password && (!options.preserveExistingPassword || lpResult.data?.created === true) ? { password: await bcrypt.hash(options.password, 10) } : {}),
+            ...(options.password && (!options.preserveExistingPassword || lpResult.data?.created === true) ? await passwordFields(options.password) : {}),
         },
         select: {
             id: true,

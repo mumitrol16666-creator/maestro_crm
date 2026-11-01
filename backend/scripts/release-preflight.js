@@ -68,6 +68,12 @@ if (releaseBuiltAt && Number.isNaN(Date.parse(releaseBuiltAt))) {
     failures.push('RELEASE_BUILT_AT must be a valid ISO datetime');
 }
 
+// Admin password lookup: without a valid key the feature silently stores nothing.
+const vaultKey = required('CRM_PASSWORD_VAULT_KEY');
+if (vaultKey && !/^[A-Za-z0-9+/]{43}=$/.test(vaultKey) && !/^[0-9a-f]{64}$/i.test(vaultKey)) {
+    failures.push('CRM_PASSWORD_VAULT_KEY must be 32 random bytes: 44 base64 characters ending with = or 64 hex characters');
+}
+
 const telegramToken = process.env.TELEGRAM_BOT_TOKEN?.trim();
 const telegramChatId = process.env.TELEGRAM_CHAT_ID?.trim();
 if (Boolean(telegramToken) !== Boolean(telegramChatId)) {

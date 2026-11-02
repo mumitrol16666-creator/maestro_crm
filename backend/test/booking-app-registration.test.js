@@ -31,3 +31,9 @@ test('Telegram: остальные заявки выглядят как рань
     assert.doesNotMatch(text, /Серикова/);
     assert.doesNotMatch(text, /💬/);
 });
+
+test('Telegram: имя и фамилия из заявки экранируются', () => {
+    const text = formatBookingMessage({ ...base, requestType: 'app_registration', name: 'A<b>', lastName: 'B&C' });
+    assert.match(text, /A&lt;b&gt; B&amp;C/);
+    assert.doesNotMatch(text, /A<b>/);
+});

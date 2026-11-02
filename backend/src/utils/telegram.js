@@ -9,6 +9,10 @@ const TELEGRAM_CONFIG = {
     }
 };
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /**
  * Форматирование сообщения о новой заявке
  */
@@ -33,17 +37,17 @@ function formatBookingMessage(booking) {
         ? String(booking.notes).split('\n').find(line => line.startsWith('Комментарий:'))
         : null;
     const commentLine = comment
-        ? `\n💬 ${comment.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')}`
+        ? `\n💬 ${escapeHtml(comment)}`
         : '';
 
     return `
 ${emoji} <b>${messageTitle}</b> ${emoji}
 ${separator}
 
-👤 <b>Имя:</b> ${fullName}
-📱 <b>Телефон:</b> ${booking.phone}
-🎭 <b>Направление:</b> ${booking.direction}
-📍 <b>Источник:</b> ${booking.source || 'Не указан'}${commentLine}
+👤 <b>Имя:</b> ${escapeHtml(fullName)}
+📱 <b>Телефон:</b> ${escapeHtml(booking.phone)}
+🎭 <b>Направление:</b> ${escapeHtml(booking.direction)}
+📍 <b>Источник:</b> ${escapeHtml(booking.source || 'Не указан')}${commentLine}
 📅 <b>Дата:</b> ${date}
 
 ${separator}

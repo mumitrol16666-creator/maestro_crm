@@ -6,8 +6,8 @@ set -euo pipefail
 TARGET="${1:-all}"
 CRM_DIR="/var/www/maestro_crm"
 LP_DIR="/var/www/maestro_school"
-CRM_DOMAIN="${CRM_DOMAIN:-app-maestro-school.duckdns.org}"
-LP_DOMAIN="${LP_DOMAIN:-maestro-school.duckdns.org}"
+CRM_DOMAIN="${CRM_DOMAIN:-crm.maestro.com.kz}"
+LP_DOMAIN="${LP_DOMAIN:-app.maestro.com.kz}"
 CRM_REPOSITORY="https://github.com/mumitrol16666-creator/maestro_crm.git"
 LP_REPOSITORY="https://github.com/mumitrol16666-creator/maestro_school.git"
 CRM_RELEASE_SHA=""
@@ -247,7 +247,9 @@ deploy_learning_platform() {
   log "LP frontend..."
   cd "$LP_DIR/web_app"
   cat > .env.local <<EOF
-NEXT_PUBLIC_API_URL=https://${LP_DOMAIN}/api/v1
+NEXT_PUBLIC_API_URL=/api/v1
+NEXT_PUBLIC_CRM_API_URL=https://${CRM_DOMAIN}
+NEXT_PUBLIC_TRIAL_LANDING_URL=https://${CRM_DOMAIN}/trial.html
 NEXT_PUBLIC_RELEASE_SHA=${LP_RELEASE_SHA}
 NEXT_PUBLIC_RELEASE_BUILT_AT=${LP_RELEASE_BUILT_AT}
 EOF
@@ -292,7 +294,7 @@ EOF
   verify_lp_release "local" "http://127.0.0.1:4000/health" "http://127.0.0.1:3001/login"
   verify_lp_release "public" "https://${LP_DOMAIN}/health" "https://${LP_DOMAIN}/login"
   cd "$LP_DIR/backend"
-  npm run smoke:production
+  SMOKE_BASE_URL="https://${LP_DOMAIN}" npm run smoke:production
   npm prune --omit=dev
 
   state_dir="$LP_DIR/deploy-state"

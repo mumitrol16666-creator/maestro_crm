@@ -477,7 +477,7 @@ async function createSsoToken(crmStudentId) {
         { expiresIn: expiresInSec },
     );
 
-    const appBase = (process.env.LEARNING_PLATFORM_URL || 'https://maestro-school.duckdns.org').replace(/\/$/, '');
+    const appBase = (process.env.LEARNING_PLATFORM_URL || 'https://app.maestro.com.kz').replace(/\/$/, '');
     const nextPath = student.role === 'teacher' ? '/admin/offline-lessons' : '/school-lessons';
 
     return {

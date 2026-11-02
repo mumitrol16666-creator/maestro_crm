@@ -246,7 +246,7 @@ async function loadStudentProfile() {
 
         const p = data.profile;
         const brand = window.MAESTRO_BRAND || {};
-        const onlineUrl = brand.website || 'https://maestro-school.duckdns.org';
+        const onlineUrl = brand.website || 'https://app.maestro.com.kz';
         const profileName = [p.lastName, p.name, p.middleName].filter(Boolean).join(' ').trim() || 'Ученик';
         const ageLabel = formatStudentAgeLabel(p.dateOfBirth);
 

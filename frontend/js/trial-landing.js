@@ -1,9 +1,9 @@
 (function () {
-    const PRIVACY_POLICY_URL = 'https://app-maestro-school.duckdns.org/privacy.html';
+    const PRIVACY_POLICY_URL = 'https://crm.maestro.com.kz/privacy.html';
     const SCHOOL_WHATSAPP = '+7 777 505 57 88';
     const DIAGNOSTIC_LESSON_PRICE = '2000 ₸';
     const CRM_ORIGIN = window.MAESTRO_TRIAL_CRM_ORIGIN
-        || (window.location.hostname === 'maestro-school.duckdns.org' ? 'https://app-maestro-school.duckdns.org' : '');
+        || (['app.maestro.com.kz', 'maestro-school.duckdns.org'].includes(window.location.hostname) ? 'https://crm.maestro.com.kz' : '');
     const BOOKING_API_URL = `${CRM_ORIGIN}/api/bookings`;
     const marketing = window.MaestroMarketing;
 

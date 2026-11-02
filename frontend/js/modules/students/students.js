@@ -825,7 +825,7 @@ async function showStudentCurrentPassword(studentId, isLinked = false) {
 
 function showStudentPlatformCredentials(student, login, password, mode, setAt = null) {
     closeStudentPlatformModal('studentPlatformCredentialsModal');
-    const platformUrl = 'https://maestro-school.duckdns.org/';
+    const platformUrl = 'https://app.maestro.com.kz/';
     const phoneDigitsRaw = String(student.phone || '').replace(/\D/g, '');
     const whatsappPhone = phoneDigitsRaw.startsWith('8')
         ? `7${phoneDigitsRaw.slice(1)}`
@@ -1068,7 +1068,7 @@ async function openStudentInPlatform(studentId) {
             return;
         }
         const token = data.data?.token;
-        const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
+        const loginBase = (data.data?.redirectUrl || 'https://app.maestro.com.kz/login').split('?')[0];
         const next = data.data?.next || '/school-lessons';
         if (!token) {
             showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');
@@ -3655,9 +3655,9 @@ function showStudentCreatedModal(studentName, studentPhone, password, classesCou
     const schoolName = (window.MAESTRO_BRAND && window.MAESTRO_BRAND.fullName) || 'Музыкальная школа Maestro';
     const supportContact = typeof getMaestroSupportText === 'function'
         ? getMaestroSupportText()
-        : ((window.MAESTRO_BRAND && window.MAESTRO_BRAND.website) || 'maestro-school.duckdns.org');
+        : ((window.MAESTRO_BRAND && window.MAESTRO_BRAND.website) || 'app.maestro.com.kz');
     const platformLogin = platformInfo?.login || studentPhone;
-    const platformUrl = platformInfo?.url || 'https://maestro-school.duckdns.org';
+    const platformUrl = platformInfo?.url || 'https://app.maestro.com.kz';
     const crmLoginNote = platformInfo?.login && platformInfo.login !== studentPhone
         ? `\nКабинет оплаты: ${studentPhone}`
         : '';

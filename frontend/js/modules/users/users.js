@@ -719,7 +719,7 @@ function showPasswordModal(userName, userPhone, password, copySuccess, userType 
     `;
 
     const title = isView ? 'ТЕКУЩИЙ ПАРОЛЬ' : (userType ? `${userType.toUpperCase()} СОЗДАН` : 'НОВЫЙ ПАРОЛЬ СОЗДАН');
-    const platformUrl = 'https://maestro-school.duckdns.org/';
+    const platformUrl = 'https://app.maestro.com.kz/';
     const phoneDigits = String(userPhone || '').replace(/\D/g, '');
     const isStudent = userRole === 'student';
     const platformLogin = isStudent && phoneDigits ? `s_${phoneDigits}` : userPhone;
@@ -1424,7 +1424,7 @@ async function openTeacherInPlatform(teacherId) {
             return;
         }
         const token = data.data?.token;
-        const loginBase = (data.data?.redirectUrl || 'https://maestro-school.duckdns.org/login').split('?')[0];
+        const loginBase = (data.data?.redirectUrl || 'https://app.maestro.com.kz/login').split('?')[0];
         const next = data.data?.next || '/admin/offline-lessons';
         if (!token) {
             showToast('Не удалось открыть приложение. Попробуйте позже.', 'error');

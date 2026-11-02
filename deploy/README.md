@@ -6,8 +6,8 @@
 
 | Проект | Путь на сервере | Домен |
 |--------|-----------------|-------|
-| CRM | `/var/www/maestro_crm` | `app-maestro-school.duckdns.org` |
-| Learning Platform | `/var/www/maestro_school` | `maestro-school.duckdns.org` |
+| CRM | `/var/www/maestro_crm` | `crm.maestro.com.kz` |
+| Learning Platform | `/var/www/maestro_school` | `app.maestro.com.kz` |
 
 ## GitHub Actions
 
@@ -63,7 +63,7 @@ curl http://127.0.0.1:5000/api/health   # CRM
 curl http://127.0.0.1:4000/health         # Learning Platform
 git ls-remote https://github.com/mumitrol16666-creator/maestro_school.git \
   refs/heads/main
-curl -fsS https://maestro-school.duckdns.org/login \
+curl -fsS https://app.maestro.com.kz/login \
   | grep -o 'name="maestro-release" content="[^"]*"'
 ```
 

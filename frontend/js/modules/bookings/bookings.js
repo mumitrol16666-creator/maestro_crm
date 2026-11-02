@@ -2045,7 +2045,7 @@ function initBookingConversion() {
                     const studentName = convertData.student.name;
                     const studentPhone = convertData.student.phone;
                     const platformInfo = convertData.platform?.login
-                        ? { login: convertData.platform.login, url: 'https://maestro-school.duckdns.org' }
+                        ? { login: convertData.platform.login, url: 'https://app.maestro.com.kz' }
                         : null;
 
                     // Копируем пароль в буфер

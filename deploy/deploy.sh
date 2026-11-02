@@ -4,7 +4,7 @@ set -euo pipefail
 umask 077
 
 APP_DIR="/var/www/maestro_crm"
-PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-app-maestro-school.duckdns.org}"
+PUBLIC_DOMAIN="${PUBLIC_DOMAIN:-crm.maestro.com.kz}"
 BASELINE_MIGRATION="20260831010000_baseline_remote_main"
 BASELINE_SCHEMA="prisma/baselines/20260831_remote_main/schema.prisma"
 BACKUP_DIR="$APP_DIR/backups"

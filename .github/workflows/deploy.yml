@@ -185,7 +185,7 @@ jobs:
               fi
             done
 
-            curl -fsS -o /dev/null https://app-maestro-school.duckdns.org/login.html
+            curl -fsS -o /dev/null https://crm.maestro.com.kz/login.html
 
       - name: Health checks (Learning Platform)
         if: steps.target.outputs.value == 'all' || steps.target.outputs.value == 'learning-platform'
@@ -214,4 +214,4 @@ jobs:
               fi
             done
 
-            curl -fsS -o /dev/null https://maestro-school.duckdns.org/
+            curl -fsS -o /dev/null https://app.maestro.com.kz/

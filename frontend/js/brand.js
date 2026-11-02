@@ -4,7 +4,7 @@ window.MAESTRO_BRAND = {
   crmTitle: 'Панель Maestro',
   tagline: 'Рабочее место музыкальной школы',
   schoolType: 'музыкальная школа',
-  website: 'https://maestro-school.duckdns.org',
+  website: 'https://app.maestro.com.kz',
   logoUrl: '/assets/images/maestro-icon.svg',
   logoMaskableUrl: '/assets/images/maestro-icon-maskable.svg',
   // Укажите номер школы, когда будет известен:
@@ -16,7 +16,7 @@ window.getMaestroSupportText = function () {
   if (brand.supportPhone) {
     return brand.supportPhone;
   }
-  return brand.website || 'maestro-school.duckdns.org';
+  return brand.website || 'app.maestro.com.kz';
 };
 
 window.getMaestroSupportMessage = function () {

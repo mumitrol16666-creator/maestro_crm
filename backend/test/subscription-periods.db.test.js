@@ -70,9 +70,10 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal((await req(`/renewals/${r.id}/confirm`, {})).status, 409);
         const print = await htmlRequest(doc.id);
         assert.equal(print.status, 200); assert.equal(print.cache, 'no-store');
-        assert.equal((print.html.match(/<article /g) || []).length, 2);
+        assert.equal((print.html.match(/<article /g) || []).length, 1); // одно приложение, казахский и русский в двух колонках
+        assert.match(print.html, /<td lang="kk">/); assert.match(print.html, /<td lang="ru">/);
         assert.match(print.html, /Зачёт остатка: 4000/); assert.match(print.html, /К оплате с учётом зачёта: 20000/);
-        assert.match(print.html, /Первый платёж: 8000 тенге. Доплата: 12000/);
+        assert.match(print.html, /Первый платёж: 8000 теңге \/ тенге\.\s+Қосымша төлем \/ Доплата: 12000/);
         assert.match(print.html, /№ М-12 от 01.09.2026/); assert.match(print.html, /Пайдалану мерзімі/);
         assert.match(print.html, /Марата Оспанова, 52\/2/); assert.match(print.html, /KZ65722S000039869067/);
         assert.match(print.html, /Заказчик: Продление Тест/); // Adult is the customer, even if another name was sent.
@@ -106,7 +107,7 @@ if (!process.env.TEST_DATABASE_URL) {
     test('credit-only appendix shows zero first cash and correct debt, without inventing a receipt', async () => {
         const r = await service.prepareRenewal(source.id, proposal({ ...printedProposal(), terms: { ...terms, totalPrice: 8000, firstPayment: 4000 }, payment: received(0) }), admin.id);
         const doc = await service.prepareAppendix(r.id, appendixInput(), admin.id);
-        assert.match(await service.appendixHtml(doc.id), /Первый платёж: 0 тенге. Доплата: 4000/);
+        assert.match(await service.appendixHtml(doc.id), /Первый платёж: 0 теңге \/ тенге\.\s+Қосымша төлем \/ Доплата: 4000/);
         await service.signAppendix(doc.id, { date: new Date().toISOString(), confirmed: true }, admin.id);
         const result = await service.confirmRenewal(r.id, admin.id); assert.equal(result.paymentId, null); assert.equal(await prisma.payment.count(), 1);
     });

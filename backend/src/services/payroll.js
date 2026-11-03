@@ -609,6 +609,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
                 teacherId: id,
                 teacherName: name,
                 role: employee?.role || null,
+                isInactive: employee?.status === 'inactive',
                 position: employee?.staffPosition || (employee?.role === 'teacher' ? 'Преподаватель' : 'Сотрудник'),
                 lessons: 0,
                 lessonEarnings: 0,
@@ -820,7 +821,21 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         row.timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    const employeeRows = Array.from(rows.values());
+    // Keep real history for former employees, but do not add empty register rows
+    // merely because the old account still has a payroll role or settings.
+    const allRows = Array.from(rows.values());
+    const employeeRows = allRows.filter(row => !row.isInactive || row.timeline.length > 0);
+    // Former employees with nothing in this period stay out of the register and totals,
+    // but the operation form still lists them (e.g. a settlement booked after leaving).
+    const formerEmployees = allRows
+        .filter(row => row.isInactive && row.timeline.length === 0)
+        .map(row => ({
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            position: row.position,
+            isInactive: true,
+            due: 0,
+        }));
     const totals = employeeRows.reduce((acc, row) => {
         acc.employees += 1;
         if (row.role === 'teacher') acc.teachers += 1;
@@ -855,6 +870,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         totals,
         employees: employeeRows,
         teachers: employeeRows,
+        formerEmployees,
     };
 }
 

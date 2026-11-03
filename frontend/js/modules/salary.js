@@ -702,7 +702,10 @@ function openSalaryOperation(type, employeeId = '') {
         return;
     }
     const employees = salaryState.data?.employees || salaryState.data?.teachers || [];
-    const selectedEmployee = employees.find(
+    // Former employees without entries this month are not register rows, but bonuses,
+    // penalties and settlements can still be booked for them.
+    const formerEmployees = salaryState.data?.formerEmployees || [];
+    const selectedEmployee = [...employees, ...formerEmployees].find(
         item => (item.employeeId || item.teacherId) === employeeId,
     );
     const operationLabel = salaryOperationLabel(type);
@@ -742,6 +745,16 @@ function openSalaryOperation(type, employeeId = '') {
                             ${salaryEsc(optionName)} · ${salaryEsc(employee.position || 'Сотрудник')}
                         </option>
                     `; }).join('')}
+                    ${formerEmployees.length ? `
+                        <optgroup label="Бывшие сотрудники">
+                            ${formerEmployees.map(employee => `
+                                <option value="${salaryEsc(employee.employeeId)}" data-due="0"
+                                        ${employee.employeeId === employeeId ? 'selected' : ''}>
+                                    ${salaryEsc(employee.employeeName)} · ${salaryEsc(employee.position || 'Сотрудник')}
+                                </option>
+                            `).join('')}
+                        </optgroup>
+                    ` : ''}
                 </select>
             </label>
             <div class="salary-form-grid">

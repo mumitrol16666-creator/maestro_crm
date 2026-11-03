@@ -1197,6 +1197,8 @@ model Booking {
   // Document 23, step 2: «Лист первого занятия» handed to the family (who and when marked it).
   trialSheetGivenAt    DateTime?
   trialSheetGivenById  String?
+  // The sheet's content as handed (decision 03.11): later prints use it, not the current report.
+  trialSheetSnapshot   Json?
   convertedToStudentId String?
   convertedById        String?
   convertedAt          DateTime?

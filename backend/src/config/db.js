@@ -21,10 +21,11 @@ const adapter = new PrismaPg(pool);
 // Initialize Prisma Client (no 'query' log — it floods stdout and causes backpressure)
 // The encrypted password copy leaves the database only where a query asks for it
 // explicitly with omit: { passwordEncrypted: false } (the admin reveal route).
+// The handed trial sheet copy (a whole report) is read only by the sheet service with `select`.
 const prisma = new PrismaClient({
     adapter,
     log: ['info', 'warn', 'error'],
-    omit: { student: { passwordEncrypted: true } },
+    omit: { student: { passwordEncrypted: true }, booking: { trialSheetSnapshot: true } },
 });
 
 const connectDB = async () => {

@@ -10,6 +10,7 @@ function parseOptionalDate(value) {
 }
 const { body, validationResult } = require('express-validator');
 const { prisma } = require('../config/db');
+const { Prisma } = require('@prisma/client');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const { passwordFields } = require('../services/passwordVault');
 const { notify } = require('../services/notifications');
@@ -24,7 +25,7 @@ const {
 } = require('../services/trialPolicy');
 const { syncTrialPayment } = require('../services/trialPayment');
 const { buildTrialInvitation } = require('../services/trialInvitation');
-const { setTrialSheetGiven, TrialSheetError } = require('../services/trialSheet');
+const { setTrialSheetGiven, trialSheetSnapshotForClass, TrialSheetError } = require('../services/trialSheet');
 const { isTrialReportV3 } = require('../services/trialReport');
 const {
     bookingQueueWhere,
@@ -717,10 +718,12 @@ router.patch('/:id/trial-funnel', authenticate, requireSalesOrAdmin, async (req,
         if (stage === 'sheet_given' && !booking.trialSheetGivenAt) {
             data.trialSheetGivenAt = new Date();
             data.trialSheetGivenById = req.user.isDemoUser ? null : req.user.id;
+            data.trialSheetSnapshot = await trialSheetSnapshotForClass(prisma, booking.trialClassId, data.trialSheetGivenAt);
         }
         if (stageChanged && ['scheduled', 'held'].includes(stage) && booking.trialSheetGivenAt) {
             data.trialSheetGivenAt = null;
             data.trialSheetGivenById = null;
+            data.trialSheetSnapshot = Prisma.DbNull;
         }
         if (stage === 'scheduled' && deadlineDefault && booking.trialScheduledAt) {
             data.trialNextActionAt = booking.trialScheduledAt;

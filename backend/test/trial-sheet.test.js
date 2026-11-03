@@ -65,7 +65,8 @@ test('the sheet for a lead takes the name from the booking', async () => {
     }), 'c1');
     assert.match(sheet.html, /Лид QA/);
     assert.match(sheet.html, /Сидоров Владислав/);
-    assert.deepEqual(Object.keys(sheet), ['html']);
+    assert.deepEqual(Object.keys(sheet), ['html', 'handedCopy']);
+    assert.equal(sheet.handedCopy, false);
 });
 
 test('no sheet for a missing lesson, a regular lesson or an old-format report', async () => {
@@ -180,4 +181,27 @@ test('analytics count a handed sheet as «Итог для семьи»', () => {
     assert.equal(getCurrentTrialStage({ trialFunnelStage: 'sheet_given' }), 'sheet_given');
     const later = getTrialMilestones({ trialClassId: 'c1', trialFunnelStage: 'contacted', trialSheetGivenAt: now });
     assert.equal(later.analysisReady, true);
+});
+
+test('the handed copy is kept and printed even after the report is corrected', async () => {
+    const lesson = { ...v3Class, date: new Date('2026-11-03T07:20:00Z'), teacher: { name: 'Владислав', lastName: 'Сидоров' }, individualStudent: null };
+    const db = markPrisma({ classRecord: lesson, booking: { id: 'b1', name: 'QA', lastName: 'Лид', status: 'thinking', trialFunnelStage: 'held', trialSheetGivenAt: null } });
+    await setTrialSheetGiven(db, 'c1', { given: true, actorId: 'm1', now });
+    const copy = db.state.booking.trialSheetSnapshot;
+    assert.equal(copy.studentName, 'Лид QA');
+    assert.equal(copy.report.lessonFacts.achieved, 'Чистый звук');
+    assert.equal(copy.capturedAt, now.toISOString());
+
+    // The lesson goes back to the teacher, who rewrites a line; the family still holds the first sheet.
+    lesson.trialReport = { ...report, lessonFacts: { ...report.lessonFacts, achieved: 'Исправлено после возврата' } };
+    const printed = await buildTrialSheetForClass(db, 'c1');
+    assert.equal(printed.handedCopy, true);
+    assert.match(printed.html, /Чистый звук/);
+    assert.doesNotMatch(printed.html, /Исправлено после возврата/);
+
+    await setTrialSheetGiven(db, 'c1', { given: false, actorId: 'm1', now });
+    assert.equal(db.state.booking.trialSheetGivenAt, null);
+    const live = await buildTrialSheetForClass(db, 'c1');
+    assert.equal(live.handedCopy, false);
+    assert.match(live.html, /Исправлено после возврата/);
 });

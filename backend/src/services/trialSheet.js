@@ -1,4 +1,5 @@
 const fs = require('fs');
+const { Prisma } = require('@prisma/client');
 const path = require('path');
 const { isTrialReportV3, TRIAL_DIAGNOSTIC_BLOCKS, TRIAL_DIAGNOSTIC_LABELS } = require('./trialReport');
 const { findTrialBookingForClass } = require('./trialClass');
@@ -231,7 +232,8 @@ class TrialSheetError extends Error {
 }
 
 /** Loads the trial lesson and renders its sheet; refuses lessons without a v3 report. */
-async function buildTrialSheetForClass(prisma, classId) {
+/** What the sheet shows, from the lesson as it is now. Throws when there is no sheet to make. */
+async function liveTrialSheetContent(prisma, classId) {
     const classRecord = await prisma.class.findUnique({
         where: { id: classId },
         include: {
@@ -240,7 +242,9 @@ async function buildTrialSheetForClass(prisma, classId) {
         },
     });
     if (!classRecord) throw new TrialSheetError(404, 'CLASS_NOT_FOUND', 'Урок не найден');
-    const booking = await findTrialBookingForClass(prisma, classRecord.id, { id: true, name: true, lastName: true, direction: true });
+    const booking = await findTrialBookingForClass(prisma, classRecord.id, {
+        id: true, name: true, lastName: true, direction: true, trialSheetGivenAt: true, trialSheetSnapshot: true,
+    });
     if (classRecord.classType !== 'trial' && !booking) {
         throw new TrialSheetError(400, 'NOT_A_TRIAL', 'Лист первого занятия есть только у пробного урока');
     }
@@ -248,15 +252,43 @@ async function buildTrialSheetForClass(prisma, classId) {
         throw new TrialSheetError(409, 'TRIAL_SHEET_NEEDS_REPORT', 'Лист печатается после того, как преподаватель отправит диагностику в приложении.');
     }
     const report = classRecord.trialReport;
-    const studentName = personName(classRecord.individualStudent || booking, 'Ученик');
-    const html = renderTrialSheetHtml({
-        studentName,
-        teacherName: personName(classRecord.teacher, 'Преподаватель'),
-        direction: report.studentProfile?.direction || booking?.direction || '',
-        lessonDate: classRecord.date,
-        report,
-    });
-    return { html };
+    return {
+        booking,
+        content: {
+            studentName: personName(classRecord.individualStudent || booking, 'Ученик'),
+            teacherName: personName(classRecord.teacher, 'Преподаватель'),
+            direction: report.studentProfile?.direction || booking?.direction || '',
+            lessonDate: classRecord.date ? new Date(classRecord.date).toISOString() : null,
+            report,
+        },
+    };
+}
+
+/** The copy saved when the sheet was handed to the family, if it is a usable one. */
+function savedTrialSheetContent(booking) {
+    const snapshot = booking?.trialSheetGivenAt ? booking.trialSheetSnapshot : null;
+    if (!snapshot || typeof snapshot !== 'object' || !isTrialReportV3(snapshot.report)) return null;
+    return snapshot;
+}
+
+function renderTrialSheetContent(content) {
+    return renderTrialSheetHtml({ ...content, lessonDate: content.lessonDate ? new Date(content.lessonDate) : null });
+}
+
+/**
+ * The sheet to print. Once it is marked as handed, the family's copy is printed (decision 03.11):
+ * a report corrected after a return to the teacher does not change what the family holds.
+ */
+async function buildTrialSheetForClass(prisma, classId) {
+    const { booking, content } = await liveTrialSheetContent(prisma, classId);
+    const saved = savedTrialSheetContent(booking);
+    return { html: renderTrialSheetContent(saved || content), handedCopy: Boolean(saved) };
+}
+
+/** The copy to keep at the moment of marking: the sheet's content as the family got it. */
+async function trialSheetSnapshotForClass(prisma, classId, now = new Date()) {
+    const { content } = await liveTrialSheetContent(prisma, classId);
+    return { ...content, capturedAt: now.toISOString() };
 }
 
 const SHEET_GIVEN_SELECT = {
@@ -290,7 +322,11 @@ async function setTrialSheetGiven(prisma, classId, { given, actorId, now = new D
     let data;
     if (given) {
         if (booking.trialSheetGivenAt) return booking;
-        data = { trialSheetGivenAt: now, trialSheetGivenById: actorId || null };
+        data = {
+            trialSheetGivenAt: now,
+            trialSheetGivenById: actorId || null,
+            trialSheetSnapshot: await trialSheetSnapshotForClass(prisma, classRecord.id, now),
+        };
         if (!closed && !stageIsPastHeld(booking.trialFunnelStage)) {
             Object.assign(data, {
                 trialFunnelStage: 'sheet_given',
@@ -300,7 +336,7 @@ async function setTrialSheetGiven(prisma, classId, { given, actorId, now = new D
         }
     } else {
         if (!booking.trialSheetGivenAt) return booking;
-        data = { trialSheetGivenAt: null, trialSheetGivenById: null };
+        data = { trialSheetGivenAt: null, trialSheetGivenById: null, trialSheetSnapshot: Prisma.DbNull };
         if (!closed && booking.trialFunnelStage === 'sheet_given') {
             Object.assign(data, {
                 trialFunnelStage: 'held',
@@ -317,4 +353,4 @@ async function setTrialSheetGiven(prisma, classId, { given, actorId, now = new D
     return findTrialBookingForClass(prisma, classRecord.id, SHEET_GIVEN_SELECT);
 }
 
-module.exports = { renderTrialSheetHtml, buildTrialSheetForClass, setTrialSheetGiven, TrialSheetError };
+module.exports = { renderTrialSheetHtml, buildTrialSheetForClass, trialSheetSnapshotForClass, setTrialSheetGiven, TrialSheetError };

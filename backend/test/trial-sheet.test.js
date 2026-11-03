@@ -79,3 +79,105 @@ test('no sheet for a missing lesson, a regular lesson or an old-format report', 
         (error) => error.code === 'TRIAL_SHEET_NEEDS_REPORT' && error.status === 409,
     );
 });
+
+// «Лист отдан» (decision of 03.11): replaces «Подготовить анализ» for v3 trials.
+const { setTrialSheetGiven } = require('../src/services/trialSheet');
+const { trialNextActionAfterHeld, stageIsPastHeld, TRIAL_FUNNEL_STAGES } = require('../src/services/trialFunnel');
+const { getTrialMilestones, getCurrentTrialStage } = require('../src/services/trialAnalytics');
+
+function markPrisma({ classRecord, booking }) {
+    const state = { booking: booking ? { ...booking } : null, updates: [] };
+    return {
+        state,
+        class: { findUnique: async () => classRecord },
+        booking: {
+            findUnique: async () => state.booking,
+            // Mirrors the conditional write: it lands only while the mark is as it was read.
+            updateMany: async ({ where, data }) => {
+                const marked = Boolean(state.booking.trialSheetGivenAt);
+                const expectsMarked = where.trialSheetGivenAt !== null;
+                if (marked !== expectsMarked) return { count: 0 };
+                state.updates.push(data);
+                state.booking = { ...state.booking, ...data };
+                return { count: 1 };
+            },
+        },
+    };
+}
+
+const v3Class = { id: 'c1', classType: 'trial', trialReport: report };
+const now = new Date('2026-11-03T10:00:00Z');
+
+test('after approval a v3 trial waits for the sheet, an older one for the analysis', () => {
+    assert.equal(trialNextActionAfterHeld(report), 'give_sheet');
+    assert.equal(trialNextActionAfterHeld({ version: 2, lessonFacts: {} }), 'prepare_analysis');
+    assert.equal(trialNextActionAfterHeld(null), 'prepare_analysis');
+    assert.ok(TRIAL_FUNNEL_STAGES.includes('sheet_given'));
+    assert.equal(stageIsPastHeld('held'), false);
+    assert.equal(stageIsPastHeld('sheet_given'), true);
+    assert.equal(stageIsPastHeld('thinking'), true);
+});
+
+test('«Лист отдан» moves a held booking on and asks the manager to call in a day', async () => {
+    const db = markPrisma({ classRecord: v3Class, booking: { id: 'b1', status: 'thinking', trialFunnelStage: 'held', trialNextAction: 'give_sheet', trialSheetGivenAt: null } });
+    const result = await setTrialSheetGiven(db, 'c1', { given: true, actorId: 'admin-1', now });
+    assert.equal(result.trialFunnelStage, 'sheet_given');
+    assert.equal(result.trialNextAction, 'contact_family');
+    assert.equal(result.trialNextActionAt.toISOString(), '2026-11-04T10:00:00.000Z');
+    assert.equal(result.trialSheetGivenAt, now);
+    assert.equal(result.trialSheetGivenById, 'admin-1');
+    await setTrialSheetGiven(db, 'c1', { given: true, actorId: 'admin-2', now: new Date() });
+    assert.equal(db.state.updates.length, 1, 'a second mark changes nothing');
+});
+
+test('a booking already past the sheet keeps its stage; only the fact is recorded', async () => {
+    const db = markPrisma({ classRecord: v3Class, booking: { id: 'b1', status: 'thinking', trialFunnelStage: 'contacted', trialNextAction: 'follow_up', trialSheetGivenAt: null } });
+    const result = await setTrialSheetGiven(db, 'c1', { given: true, actorId: 'm1', now });
+    assert.equal(result.trialFunnelStage, 'contacted');
+    assert.equal(result.trialNextAction, 'follow_up');
+    assert.equal(result.trialSheetGivenAt, now);
+});
+
+test('removing a mistaken mark returns the booking to «Отдать лист»', async () => {
+    const db = markPrisma({ classRecord: v3Class, booking: { id: 'b1', status: 'thinking', trialFunnelStage: 'sheet_given', trialNextAction: 'contact_family', trialSheetGivenAt: now, trialSheetGivenById: 'm1' } });
+    const result = await setTrialSheetGiven(db, 'c1', { given: false, actorId: 'm1', now });
+    assert.equal(result.trialFunnelStage, 'held');
+    assert.equal(result.trialNextAction, 'give_sheet');
+    assert.equal(result.trialSheetGivenAt, null);
+    assert.equal(result.trialSheetGivenById, null);
+});
+
+test('no mark without the teacher’s v3 report or a trial booking', async () => {
+    await assert.rejects(
+        setTrialSheetGiven(markPrisma({ classRecord: { id: 'c1', classType: 'trial', trialReport: { version: 2 } }, booking: { id: 'b1' } }), 'c1', { given: true }),
+        (error) => error.code === 'TRIAL_SHEET_NEEDS_REPORT',
+    );
+    await assert.rejects(
+        setTrialSheetGiven(markPrisma({ classRecord: v3Class, booking: null }), 'c1', { given: true }),
+        (error) => error.code === 'NOT_A_TRIAL',
+    );
+});
+
+test('two simultaneous marks write once', async () => {
+    const db = markPrisma({ classRecord: v3Class, booking: { id: 'b1', status: 'thinking', trialFunnelStage: 'held', trialSheetGivenAt: null } });
+    const stale = { ...db.state.booking };
+    const original = db.booking.findUnique;
+    let reads = 0;
+    // Both requests read the booking before either writes.
+    db.booking.findUnique = async () => (reads++ < 2 ? stale : original());
+    await Promise.all([
+        setTrialSheetGiven(db, 'c1', { given: true, actorId: 'm1', now }),
+        setTrialSheetGiven(db, 'c1', { given: true, actorId: 'm2', now: new Date('2026-11-03T10:05:00Z') }),
+    ]);
+    assert.equal(db.state.updates.length, 1);
+    assert.equal(db.state.booking.trialSheetGivenById, 'm1');
+});
+
+test('analytics count a handed sheet as «Итог для семьи»', () => {
+    const milestones = getTrialMilestones({ trialClassId: 'c1', trialFunnelStage: 'sheet_given', trialSheetGivenAt: now });
+    assert.equal(milestones.held, true);
+    assert.equal(milestones.analysisReady, true);
+    assert.equal(getCurrentTrialStage({ trialFunnelStage: 'sheet_given' }), 'sheet_given');
+    const later = getTrialMilestones({ trialClassId: 'c1', trialFunnelStage: 'contacted', trialSheetGivenAt: now });
+    assert.equal(later.analysisReady, true);
+});

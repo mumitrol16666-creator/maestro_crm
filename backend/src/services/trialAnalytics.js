@@ -16,7 +16,8 @@ const TRIAL_FUNNEL_LABELS = Object.freeze({
     leads: 'Заявки на пробный',
     scheduled: 'Назначены',
     held: 'Проведены',
-    analysis_ready: 'Анализ готов',
+    // The result for the family: the AI analysis (older form) or «Лист первого занятия» (v3).
+    analysis_ready: 'Итог для семьи',
     contacted: 'Менеджер связался',
     thinking: 'Думают',
     sold: 'Купили обучение',
@@ -85,9 +86,10 @@ function getTrialMilestones(booking, classItem = null) {
         || explicitStage
     );
     const held = classWasHeld(classItem)
-        || ['held', 'analysis_ready', 'contacted', 'thinking', 'sold'].includes(explicitStage);
+        || ['held', 'analysis_ready', 'sheet_given', 'contacted', 'thinking', 'sold'].includes(explicitStage);
     const analysisReady = classHasAnalysis(classItem)
-        || ['analysis_ready', 'contacted', 'thinking', 'sold'].includes(explicitStage);
+        || Boolean(booking?.trialSheetGivenAt)
+        || ['analysis_ready', 'sheet_given', 'contacted', 'thinking', 'sold'].includes(explicitStage);
     const contacted = ['contacted', 'thinking', 'sold'].includes(explicitStage);
     const thinking = booking?.status === 'thinking' || ['thinking', 'sold'].includes(explicitStage);
 

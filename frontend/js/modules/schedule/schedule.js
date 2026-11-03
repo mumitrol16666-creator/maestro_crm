@@ -5224,7 +5224,7 @@ function bindTrialReportInputs() {
 }
 
 // Document 23, step 2: «Лист первого занятия» for the family, rendered by the backend from the v3 report.
-// The admin prints it here, the teacher from the app (the CRM route is admin-only).
+// The admin prints it here, the manager from the booking card, the teacher from the app.
 function trialSheetButtonHtml(classData) {
     if (!classData || !isTrialReportV3(classData.trialReport)) return '';
     if (!(typeof isAdmin === 'function' && isAdmin())) return '';

@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const { isTrialReportV3, TRIAL_DIAGNOSTIC_BLOCKS, TRIAL_DIAGNOSTIC_LABELS } = require('./trialReport');
 const { findTrialBookingForClass } = require('./trialClass');
+const { stageIsPastHeld } = require('./trialFunnel');
 
 /*
  * «Лист первого занятия» (document 23 §5.2, §10; decision 03.11). One A4 page for the family after
@@ -258,4 +259,62 @@ async function buildTrialSheetForClass(prisma, classId) {
     return { html };
 }
 
-module.exports = { renderTrialSheetHtml, buildTrialSheetForClass, TrialSheetError };
+const SHEET_GIVEN_SELECT = {
+    id: true,
+    status: true,
+    trialFunnelStage: true,
+    trialNextAction: true,
+    trialNextActionAt: true,
+    trialSheetGivenAt: true,
+    trialSheetGivenById: true,
+};
+
+/**
+ * «Лист отдан» (decision of 03.11): the mark replaces «Подготовить анализ» for trials with the
+ * app's v3 report. Marking moves a booking that has not gone further to «Лист отдан» with
+ * «Связаться с семьёй» in a day; removing the mark returns it to «Проведён / Отдать лист».
+ * Bookings already past that point (manager called, family thinking, sold) keep their stage.
+ */
+async function setTrialSheetGiven(prisma, classId, { given, actorId, now = new Date() }) {
+    const classRecord = await prisma.class.findUnique({
+        where: { id: classId },
+        select: { id: true, classType: true, trialReport: true },
+    });
+    if (!classRecord) throw new TrialSheetError(404, 'CLASS_NOT_FOUND', 'Урок не найден');
+    const booking = await findTrialBookingForClass(prisma, classRecord.id, SHEET_GIVEN_SELECT);
+    if (!booking) throw new TrialSheetError(400, 'NOT_A_TRIAL', 'У урока нет заявки на пробный');
+    if (!isTrialReportV3(classRecord.trialReport)) {
+        throw new TrialSheetError(409, 'TRIAL_SHEET_NEEDS_REPORT', 'Лист появляется после того, как преподаватель отправит диагностику в приложении.');
+    }
+    const closed = ['sold', 'rejected'].includes(booking.status);
+    let data;
+    if (given) {
+        if (booking.trialSheetGivenAt) return booking;
+        data = { trialSheetGivenAt: now, trialSheetGivenById: actorId || null };
+        if (!closed && !stageIsPastHeld(booking.trialFunnelStage)) {
+            Object.assign(data, {
+                trialFunnelStage: 'sheet_given',
+                trialNextAction: 'contact_family',
+                trialNextActionAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+            });
+        }
+    } else {
+        if (!booking.trialSheetGivenAt) return booking;
+        data = { trialSheetGivenAt: null, trialSheetGivenById: null };
+        if (!closed && booking.trialFunnelStage === 'sheet_given') {
+            Object.assign(data, {
+                trialFunnelStage: 'held',
+                trialNextAction: 'give_sheet',
+                trialNextActionAt: new Date(now.getTime() + 24 * 60 * 60 * 1000),
+            });
+        }
+    }
+    // Conditional on the mark as read: two simultaneous clicks write it once, not twice.
+    await prisma.booking.updateMany({
+        where: { id: booking.id, trialSheetGivenAt: given ? null : { not: null } },
+        data,
+    });
+    return findTrialBookingForClass(prisma, classRecord.id, SHEET_GIVEN_SELECT);
+}
+
+module.exports = { renderTrialSheetHtml, buildTrialSheetForClass, setTrialSheetGiven, TrialSheetError };

@@ -1,7 +1,10 @@
+const { isTrialReportV3 } = require('./trialReport');
+
 const TRIAL_FUNNEL_STAGES = Object.freeze([
     'scheduled',
     'held',
     'analysis_ready',
+    'sheet_given',
     'contacted',
     'thinking',
     'sold',
@@ -12,6 +15,7 @@ const TRIAL_FUNNEL_STAGE_LABELS = Object.freeze({
     scheduled: 'Пробный назначен',
     held: 'Проведён',
     analysis_ready: 'Анализ готов',
+    sheet_given: 'Лист отдан',
     contacted: 'Менеджер связался',
     thinking: 'Думают',
     sold: 'Купили',
@@ -21,6 +25,7 @@ const TRIAL_FUNNEL_STAGE_LABELS = Object.freeze({
 const TRIAL_FUNNEL_NEXT_ACTIONS = Object.freeze([
     { value: 'attend_trial', label: 'Провести пробный' },
     { value: 'prepare_analysis', label: 'Подготовить анализ' },
+    { value: 'give_sheet', label: 'Отдать лист первого занятия' },
     { value: 'contact_family', label: 'Связаться с семьёй' },
     { value: 'follow_up', label: 'Повторно связаться' },
     { value: 'await_payment', label: 'Ожидать оплату' },
@@ -73,11 +78,27 @@ function defaultTrialNextAction(stage) {
         scheduled: 'attend_trial',
         held: 'prepare_analysis',
         analysis_ready: 'contact_family',
+        sheet_given: 'contact_family',
         contacted: 'follow_up',
         thinking: 'follow_up',
         sold: 'none',
         rejected: 'none',
     })[stage] || null;
+}
+
+/**
+ * Document 23, step 2: after a trial with the app's v3 report the family gets the printed
+ * «Лист первого занятия», not the AI analysis of the older form.
+ */
+function trialNextActionAfterHeld(trialReport) {
+    return isTrialReportV3(trialReport) ? 'give_sheet' : 'prepare_analysis';
+}
+
+// Stages after «Проведён»: an approval or a sheet mark never moves the booking back from them.
+const STAGES_PAST_HELD = new Set(['analysis_ready', 'sheet_given', 'contacted', 'thinking', 'sold', 'rejected']);
+
+function stageIsPastHeld(stage) {
+    return STAGES_PAST_HELD.has(normalizeTrialFunnelStage(stage));
 }
 
 function trialFunnelPayload({ stage, nextAction, nextActionAt, lastContactAt, note }) {
@@ -124,5 +145,7 @@ module.exports = {
     isTrialBooking,
     deriveTrialFunnelStage,
     defaultTrialNextAction,
+    trialNextActionAfterHeld,
+    stageIsPastHeld,
     trialFunnelPayload,
 };

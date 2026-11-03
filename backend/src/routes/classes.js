@@ -6,7 +6,7 @@ const {
     Packer,
 } = require('docx');
 const { prisma } = require('../config/db');
-const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin } = require('../middleware/auth');
+const { authenticate, requireTeacherOrAdmin, requireAdmin, requireSuperAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const {
     deductMembershipForClass,
     refundAllDeductionsForClass,
@@ -42,7 +42,7 @@ const { loadLessonRosterState, validateLessonSubmission } = require('../services
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
 const { buildTrialSheetForClass, TrialSheetError } = require('../services/trialSheet');
-const { defaultTrialNextAction } = require('../services/trialFunnel');
+const { defaultTrialNextAction, trialNextActionAfterHeld, stageIsPastHeld } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
 const { DEFAULT_LESSON_CHARGES, getLessonChargeAmount, getMembershipLessonChargeAmount } = require('../services/lessonPricing');
@@ -2727,6 +2727,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                     status: true,
                     depositPaid: true,
                     trialManagerId: true,
+                    trialFunnelStage: true,
+                    trialSheetGivenAt: true,
                     name: true,
                     lastName: true,
                     middleName: true,
@@ -2748,9 +2750,21 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
                             status: ['trial', 'thinking', 'processed', 'new'].includes(linkedBooking.status)
                                 ? 'thinking'
                                 : linkedBooking.status,
-                            trialFunnelStage: 'held',
-                            trialNextAction: defaultTrialNextAction('held'),
-                            trialNextActionAt: new Date(),
+                            // Document 23, step 2: a v3 trial waits for «лист отдан», an older one for the
+                            // analysis; a booking already further along (sheet handed, manager called) stays there.
+                            ...(stageIsPastHeld(linkedBooking.trialFunnelStage) ? {} : linkedBooking.trialSheetGivenAt ? {
+                                // The sheet was handed right after the lesson, before this approval.
+                                trialFunnelStage: 'sheet_given',
+                                trialNextAction: 'contact_family',
+                                trialNextActionAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+                            } : {
+                                trialFunnelStage: 'held',
+                                trialNextAction: trialNextActionAfterHeld(updated.trialReport),
+                                // A day to hand the sheet, so the booking is not overdue the moment it is approved.
+                                trialNextActionAt: trialNextActionAfterHeld(updated.trialReport) === 'give_sheet'
+                                    ? new Date(Date.now() + 24 * 60 * 60 * 1000)
+                                    : new Date(),
+                            }),
                             ...(depositPaid !== undefined ? { depositPaid: nextDepositPaid } : {}),
                             trialManagerId: linkedBooking.trialManagerId || (req.user.isDemoUser ? null : req.user.id),
                             processedById: req.user.id,
@@ -2863,7 +2877,8 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
 });
 
 // GET /api/classes/:id/trial-sheet — «Лист первого занятия» for the family (document 23 §5.2).
-router.get('/:id/trial-sheet', authenticate, requireAdmin, async (req, res) => {
+// The manager hands the sheet to the family, so sales managers print it too (no money, no scores in it).
+router.get('/:id/trial-sheet', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
         const sheet = await buildTrialSheetForClass(prisma, req.params.id);
         res.set('Cache-Control', 'no-store');

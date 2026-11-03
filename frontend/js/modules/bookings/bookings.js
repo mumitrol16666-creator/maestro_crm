@@ -94,6 +94,7 @@ const trialFunnelStageLabels = {
     scheduled: 'Пробный назначен',
     held: 'Проведён',
     analysis_ready: 'Анализ готов',
+    sheet_given: 'Лист отдан',
     contacted: 'Менеджер связался',
     thinking: 'Думают',
     sold: 'Купили',
@@ -103,6 +104,7 @@ const trialFunnelStageLabels = {
 const trialFunnelActionLabels = {
     attend_trial: 'Провести пробный',
     prepare_analysis: 'Подготовить анализ',
+    give_sheet: 'Отдать лист первого занятия',
     contact_family: 'Связаться с семьёй',
     follow_up: 'Повторно связаться',
     await_payment: 'Ожидать оплату',
@@ -141,6 +143,7 @@ function getBookingNextAction(booking, stage = getBookingFunnelStage(booking)) {
         scheduled: 'attend_trial',
         held: 'prepare_analysis',
         analysis_ready: 'contact_family',
+        sheet_given: 'contact_family',
         contacted: 'follow_up',
         thinking: 'follow_up',
         sold: 'none',
@@ -182,6 +185,20 @@ function bookingDateTimeLocal(value) {
     return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
 }
 
+// Document 23, step 2: a trial with the app's report has «Лист отдан» instead of the analysis,
+// an older one keeps the analysis. What the booking already has stays selectable.
+function trialFunnelChoicesFor(booking, stages, actions) {
+    const sheet = Boolean(booking?.trialSheetAvailable);
+    const currentStage = getBookingFunnelStage(booking);
+    const currentAction = booking?.trialNextAction;
+    const hiddenStage = sheet ? 'analysis_ready' : 'sheet_given';
+    const hiddenAction = sheet ? 'prepare_analysis' : 'give_sheet';
+    return {
+        stages: stages.filter(item => item.value !== hiddenStage || item.value === currentStage),
+        actions: actions.filter(item => item.value !== hiddenAction || item.value === currentAction),
+    };
+}
+
 async function openTrialFunnelModal(bookingId) {
     try {
         const token = getAuthToken();
@@ -193,8 +210,11 @@ async function openTrialFunnelModal(bookingId) {
         if (!booking) return toast.error('Заявка не найдена');
 
         const stage = getBookingFunnelStage(booking) || 'scheduled';
-        const actions = options.actions?.length ? options.actions : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label }));
-        const stages = options.stages?.length ? options.stages : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label }));
+        const { stages, actions } = trialFunnelChoicesFor(
+            booking,
+            options.stages?.length ? options.stages : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label })),
+            options.actions?.length ? options.actions : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label })),
+        );
         const managers = options.managers?.length
             ? options.managers
             : (booking.trialManager ? [booking.trialManager] : []);
@@ -265,6 +285,7 @@ async function openTrialFunnelModal(bookingId) {
                     headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         stage: overlay.querySelector('#trialFunnelStage').value,
+                        expectedStage: booking.trialFunnelStage || null,
                         ownerId: overlay.querySelector('#trialFunnelOwner').value || null,
                         nextAction: overlay.querySelector('#trialFunnelNextAction').value || null,
                         nextActionAt: nextActionAt ? new Date(nextActionAt).toISOString() : null,
@@ -470,6 +491,11 @@ function bookingCardTimeline(booking) {
             title: 'Пробный урок',
             text: [booking.trialTeacherName, booking.trialRoomName].filter(Boolean).join(' · '),
         },
+        booking.trialSheetGivenAt && {
+            date: booking.trialSheetGivenAt,
+            title: 'Лист первого занятия отдан',
+            text: '',
+        },
         booking.trialLastContactAt && {
             date: booking.trialLastContactAt,
             title: 'Последний контакт',
@@ -592,12 +618,11 @@ async function openBookingCard(bookingId) {
             ? await loadTrialFunnelOptions().catch(() => ({}))
             : {};
         const stage = getBookingFunnelStage(booking) || (hasTrialFunnel ? 'scheduled' : '');
-        const actions = options.actions?.length
-            ? options.actions
-            : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label }));
-        const stages = options.stages?.length
-            ? options.stages
-            : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label }));
+        const { stages, actions } = trialFunnelChoicesFor(
+            booking,
+            options.stages?.length ? options.stages : Object.entries(trialFunnelStageLabels).map(([value, label]) => ({ value, label })),
+            options.actions?.length ? options.actions : Object.entries(trialFunnelActionLabels).map(([value, label]) => ({ value, label })),
+        );
         const managers = options.managers?.length
             ? options.managers
             : (booking.trialManager ? [booking.trialManager] : []);
@@ -667,7 +692,13 @@ async function openBookingCard(bookingId) {
                                     <div><dt>Преподаватель</dt><dd>${escapeBookingText(booking.trialTeacherName || 'Не назначен')}</dd></div>
                                     <div><dt>Кабинет</dt><dd>${escapeBookingText(booking.trialRoomName || 'Не назначен')}</dd></div>
                                     <div><dt>Оплата</dt><dd class="${booking.depositPaid ? 'is-success' : 'is-warning'}">${booking.depositPaid ? 'Оплачена' : 'Не оплачена'}</dd></div>
+                                    ${booking.trialSheetAvailable ? `<div><dt>Лист первого занятия</dt><dd class="${booking.trialSheetGivenAt ? 'is-success' : 'is-warning'}" data-booking-card-sheet-state>${booking.trialSheetGivenAt ? `Отдан ${escapeBookingText(formatDateTime(booking.trialSheetGivenAt))}` : 'Не отдан'}</dd></div>` : ''}
                                 </dl>
+                                ${booking.trialSheetAvailable && canManage ? `
+                                    <div class="booking-card-sheet-actions">
+                                        <button type="button" data-booking-card-sheet-print>Печать листа</button>
+                                        <button type="button" data-booking-card-sheet-given="${booking.trialSheetGivenAt ? 'false' : 'true'}">${booking.trialSheetGivenAt ? 'Снять отметку' : 'Лист отдан'}</button>
+                                    </div>` : ''}
                             </section>
 
                             <section class="booking-card-section">
@@ -784,6 +815,30 @@ async function openBookingCard(bookingId) {
             close();
             openTrialDetails(bookingId);
         });
+        overlay.querySelector('[data-booking-card-sheet-print]')?.addEventListener('click', () => {
+            if (typeof printTrialSheet === 'function') printTrialSheet(booking.trialClassId);
+        });
+        overlay.querySelector('[data-booking-card-sheet-given]')?.addEventListener('click', async (event) => {
+            const button = event.currentTarget;
+            const given = button.dataset.bookingCardSheetGiven === 'true';
+            button.disabled = true;
+            try {
+                const markResponse = await fetch(`${API_URL}/bookings/${bookingId}/trial-sheet-given`, {
+                    method: 'POST',
+                    headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ given }),
+                });
+                const markResult = await markResponse.json().catch(() => ({}));
+                if (!markResponse.ok || !markResult.success) throw new Error(markResult.error || 'Не удалось сохранить отметку');
+                close();
+                toast.success(given ? 'Отмечено: лист отдан' : 'Отметка снята');
+                await renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+                openBookingCard(bookingId);
+            } catch (error) {
+                toast.error(escapeBookingText(error.message));
+                button.disabled = false;
+            }
+        });
         overlay.querySelector('[data-booking-card-student]')?.addEventListener('click', () => {
             close();
             openConvertBookingModal(bookingId);
@@ -801,6 +856,7 @@ async function openBookingCard(bookingId) {
                     headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
                     body: JSON.stringify({
                         stage: overlay.querySelector('#bookingCardFunnelStage').value,
+                        expectedStage: booking.trialFunnelStage || null,
                         ownerId: overlay.querySelector('#bookingCardFunnelOwner').value || null,
                         nextAction: overlay.querySelector('#bookingCardNextAction').value || null,
                         nextActionAt: nextActionAt ? new Date(nextActionAt).toISOString() : null,
@@ -844,8 +900,14 @@ function bookingNextStep(booking) {
     if (funnelStage === 'analysis_ready') {
         return { tone: 'warning', title: 'Связаться', text: 'Анализ готов — менеджеру нужно связаться с семьёй.' };
     }
+    if (funnelStage === 'sheet_given') {
+        return { tone: 'warning', title: 'Связаться', text: 'Лист отдан — менеджеру нужно связаться с семьёй.' };
+    }
     if (funnelStage === 'contacted' || funnelStage === 'thinking') {
         return { tone: 'warning', title: 'Контроль', text: 'Следующий контакт нужно выполнить в установленный срок.' };
+    }
+    if (funnelStage === 'held' && (booking.trialNextAction === 'give_sheet' || booking.trialSheetAvailable)) {
+        return { tone: 'warning', title: 'Лист', text: 'Пробный проведён — распечатайте и отдайте семье лист первого занятия.' };
     }
     if (funnelStage === 'held') {
         return { tone: 'warning', title: 'Анализ', text: 'Пробный проведён — подготовьте анализ для семьи.' };

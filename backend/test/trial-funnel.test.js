@@ -9,9 +9,10 @@ const {
 
 test('воронка пробного содержит понятные отдельные этапы', () => {
     assert.deepEqual(TRIAL_FUNNEL_STAGES, [
-        'scheduled', 'held', 'analysis_ready', 'contacted', 'thinking', 'sold', 'rejected',
+        'scheduled', 'held', 'analysis_ready', 'sheet_given', 'contacted', 'thinking', 'sold', 'rejected',
     ]);
     assert.equal(defaultTrialNextAction('analysis_ready'), 'contact_family');
+    assert.equal(defaultTrialNextAction('sheet_given'), 'contact_family');
     assert.equal(defaultTrialNextAction('sold'), 'none');
 });
 

@@ -141,205 +141,14 @@ function buildPostponeOutcome(student, outcome) {
     };
 }
 
-function cleanTrialText(value, maxLength = 2000) {
-    const text = String(value || '').trim();
-    return text ? text.slice(0, maxLength) : '';
-}
-
-function cleanTrialEnum(value, allowed, fallback = '') {
-    const text = String(value || '').trim();
-    return allowed.includes(text) ? text : fallback;
-}
-
-function cleanTrialScore(value) {
-    const score = Number(value);
-    if (!Number.isFinite(score)) return null;
-    return Math.min(5, Math.max(1, Math.round(score)));
-}
-
-function cleanTrialStringArray(value, allowed = []) {
-    const source = Array.isArray(value) ? value : [];
-    return source
-        .map(item => String(item || '').trim())
-        .filter(Boolean)
-        .filter(item => !allowed.length || allowed.includes(item))
-        .slice(0, 12);
-}
-
-const TRIAL_DERIVED_LABELS = {
-    recommendedFormat: {
-        individual: 'Индивидуально',
-        group: 'В группе',
-        hybrid: 'Смешанный формат',
-        mixed: 'Смешанный формат',
-        online: 'Онлайн',
-        offline: 'Офлайн',
-    },
-    recommendedFrequency: {
-        '1_per_week': '1 раз в неделю',
-        '2_per_week': '2 раза в неделю',
-        '3_per_week': '3 раза в неделю',
-        custom: 'Индивидуальный график',
-        flexible: 'Гибко',
-    },
-    nextStep: {
-        sell_membership: 'Предложить абонемент',
-        second_trial: 'Назначить второй пробный',
-        manager_call: 'Связаться менеджеру',
-        reject: 'Не продолжать',
-        wait: 'Подождать решения',
-    },
-    priorExperience: {
-        none: 'без опыта',
-        little: 'небольшой опыт',
-        regular: 'занимался регулярно',
-    },
-};
-
-function trialDerivedLabel(group, value) {
-    return TRIAL_DERIVED_LABELS[group]?.[value] || value;
-}
-
-function normalizeTrialReport(input, classRecord = {}, options = {}) {
-    if (!input || typeof input !== 'object') return null;
-
-    const attendance = input.attendance || {};
-    const studentProfile = input.studentProfile || {};
-    const teacherAssessment = input.teacherAssessment || {};
-    const lessonFacts = input.lessonFacts || {};
-    const recommendation = input.recommendation || {};
-    const salesSignals = input.salesSignals || {};
-    const raw = input.raw || {};
-
-    const existing = classRecord?.trialReport && typeof classRecord.trialReport === 'object'
-        ? classRecord.trialReport
-        : {};
-    const teacherOnly = Boolean(options.teacherOnly);
-    const existingProfile = existing.studentProfile || {};
-    const existingLessonFacts = existing.lessonFacts || {};
-    const existingRecommendation = existing.recommendation || {};
-    const existingSalesSignals = existing.salesSignals || {};
-    const existingRaw = existing.raw || {};
-
-    return {
-        version: 2,
-        classId: classRecord.id || null,
-        classType: 'trial',
-        capturedAt: input.capturedAt || new Date().toISOString(),
-        attendance: {
-            outcome: cleanTrialEnum(attendance.outcome, ['attended', 'no_show', 'late', 'rescheduled'], 'attended'),
-            arrivedWith: cleanTrialEnum(attendance.arrivedWith, ['parent', 'alone', 'other', 'unknown'], 'unknown'),
-            // «С кем пришёл» означает только сопровождение, а не присутствие
-            // взрослого на самом уроке. Не сохраняем ложный факт attendance.
-            parentAccompanied: Boolean(attendance.parentAccompanied),
-            parentPresent: false,
-            durationFactMinutes: Math.max(0, Math.min(240, Math.round(Number(attendance.durationFactMinutes) || Number(classRecord.duration) || 0))),
-        },
-        studentProfile: {
-            direction: cleanTrialText(studentProfile.direction, 120),
-            priorExperience: cleanTrialEnum(studentProfile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
-            motivation: cleanTrialEnum(
-                teacherOnly ? (existingProfile.motivation ?? studentProfile.motivation) : studentProfile.motivation,
-                ['parent', 'student', 'both', 'unclear'],
-                'unclear',
-            ),
-            goalFromParent: cleanTrialText(teacherOnly ? (existingProfile.goalFromParent ?? studentProfile.goalFromParent) : studentProfile.goalFromParent),
-            goalFromStudent: cleanTrialText(studentProfile.goalFromStudent),
-        },
-        teacherAssessment: {
-            interestLevel: cleanTrialScore(teacherAssessment.interestLevel),
-            contactLevel: cleanTrialScore(teacherAssessment.contactLevel),
-            focusLevel: cleanTrialScore(teacherAssessment.focusLevel),
-            rhythm: cleanTrialScore(teacherAssessment.rhythm),
-            hearing: cleanTrialScore(teacherAssessment.hearing),
-            coordination: cleanTrialScore(teacherAssessment.coordination),
-            memory: cleanTrialScore(teacherAssessment.memory),
-            techniqueBase: cleanTrialScore(teacherAssessment.techniqueBase),
-            emotionalReadiness: cleanTrialScore(teacherAssessment.emotionalReadiness),
-        },
-        lessonFacts: {
-            whatWasTested: cleanTrialText(lessonFacts.whatWasTested),
-            whatWorkedWell: cleanTrialText(lessonFacts.whatWorkedWell),
-            difficulties: cleanTrialText(lessonFacts.difficulties),
-            reactionToTasks: cleanTrialText(lessonFacts.reactionToTasks),
-            parentReaction: cleanTrialText(teacherOnly ? (existingLessonFacts.parentReaction ?? lessonFacts.parentReaction) : lessonFacts.parentReaction),
-            homeworkGiven: cleanTrialText(lessonFacts.homeworkGiven),
-        },
-        recommendation: {
-            recommendedFormat: cleanTrialEnum(recommendation.recommendedFormat, ['group', 'individual', 'hybrid', 'undecided'], 'undecided'),
-            recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'custom', 'undecided'], 'undecided'),
-            recommendedLevel: cleanTrialEnum(recommendation.recommendedLevel, ['beginner', 'basic', 'intermediate', 'advanced'], 'beginner'),
-            firstMonthFocus: cleanTrialText(recommendation.firstMonthFocus),
-            nextStep: cleanTrialEnum(
-                teacherOnly ? (existingRecommendation.nextStep ?? recommendation.nextStep) : recommendation.nextStep,
-                ['sell_membership', 'second_trial', 'manager_call', 'reject', 'wait'],
-                'manager_call',
-            ),
-        },
-        salesSignals: {
-            buyProbability: cleanTrialScore(teacherOnly ? existingSalesSignals.buyProbability : salesSignals.buyProbability),
-            priceSensitivity: cleanTrialEnum(
-                teacherOnly ? (existingSalesSignals.priceSensitivity ?? salesSignals.priceSensitivity) : salesSignals.priceSensitivity,
-                ['low', 'medium', 'high', 'unknown'],
-                'unknown',
-            ),
-            scheduleFit: cleanTrialEnum(
-                teacherOnly ? (existingSalesSignals.scheduleFit ?? salesSignals.scheduleFit) : salesSignals.scheduleFit,
-                ['good', 'medium', 'bad', 'unknown'],
-                'unknown',
-            ),
-            parentObjections: cleanTrialStringArray(
-                teacherOnly ? (existingSalesSignals.parentObjections ?? salesSignals.parentObjections) : salesSignals.parentObjections,
-                ['price', 'schedule', 'distance', 'format', 'teacher', 'child_interest', 'thinking', 'other'],
-            ),
-            teacherSalesComment: cleanTrialText(
-                teacherOnly ? (existingSalesSignals.teacherSalesComment ?? salesSignals.teacherSalesComment) : salesSignals.teacherSalesComment,
-            ),
-        },
-        raw: {
-            teacherFreeComment: cleanTrialText(raw.teacherFreeComment),
-            adminComment: cleanTrialText(teacherOnly ? existingRaw.adminComment : raw.adminComment),
-        }
-    };
-}
-
-function buildTrialReportDerivedFields(report) {
-    if (!report) return {};
-    const facts = report.lessonFacts || {};
-    const recommendation = report.recommendation || {};
-    const assessment = report.teacherAssessment || {};
-    const profile = report.studentProfile || {};
-
-    const topicParts = [
-        'Пробный урок',
-        profile.direction ? `направление: ${profile.direction}` : '',
-        profile.priorExperience && profile.priorExperience !== 'unknown' ? `опыт: ${trialDerivedLabel('priorExperience', profile.priorExperience)}` : '',
-    ].filter(Boolean);
-
-    const summaryParts = [
-        facts.whatWasTested ? `Проверили: ${facts.whatWasTested}` : '',
-        facts.whatWorkedWell ? `Получилось: ${facts.whatWorkedWell}` : '',
-        facts.difficulties ? `Трудности: ${facts.difficulties}` : '',
-        assessment.interestLevel ? `Интерес: ${assessment.interestLevel}/5` : '',
-        assessment.contactLevel ? `Контакт: ${assessment.contactLevel}/5` : '',
-    ].filter(Boolean);
-
-    const nextParts = [
-        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
-        recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
-        recommendation.firstMonthFocus ? `Фокус: ${recommendation.firstMonthFocus}` : '',
-        // Коммерческий следующий шаг хранится для менеджера и не попадает в
-        // поля обычного отчёта по уроку.
-    ].filter(Boolean);
-
-    return {
-        topic: topicParts.join(' · ') || 'Пробный урок',
-        lessonSummary: summaryParts.join('\n') || report.raw?.teacherFreeComment || 'Анкета пробного заполнена',
-        homeworkDraft: facts.homeworkGiven || '',
-        nextLessonFocus: nextParts.join('\n'),
-        teacherComment: report.raw?.teacherFreeComment || '',
-    };
-}
+const {
+    normalizeTrialReport,
+    buildTrialReportDerivedFields,
+    isTrialReportV3,
+    cleanTrialText,
+    cleanTrialEnum,
+    trialDerivedLabel,
+} = require('../services/trialReport');
 
 function sanitizeFileName(value, fallback = 'maestro-trial-analysis') {
     return String(value || fallback)
@@ -2908,18 +2717,30 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             });
 
             if (isTrial) {
-                const linkedBooking = trialBooking?.id === 'class-type-trial'
-                    ? await findTrialBookingForClass(tx, updated.id)
-                    : trialBooking;
+                // The booking is read with the fields this block decides on. Read with `id` only, its
+                // status stayed «пробный» after approval, the deposit counted as unpaid (a paid trial
+                // approved without an explicit depositPaid failed TRIAL_PAYMENT_NOT_REVERSIBLE) and the
+                // manager was replaced by whoever approved (03.11, document 23).
+                const linkedBooking = await findTrialBookingForClass(tx, updated.id, {
+                    id: true,
+                    status: true,
+                    depositPaid: true,
+                    trialManagerId: true,
+                    name: true,
+                    lastName: true,
+                    middleName: true,
+                });
                 if (linkedBooking) {
-                    const nextDepositPaid = depositPaid !== undefined
-                        ? Boolean(depositPaid)
-                        : Boolean(linkedBooking.depositPaid);
-                    await syncTrialPayment(tx, linkedBooking, {
-                        paid: nextDepositPaid,
-                        actorId: req.user.id,
-                        paymentMethod: trialPaymentMethod,
-                    });
+                    // The cash register moves only on an explicit choice in this request: without
+                    // depositPaid approval neither records a 2 000 ₸ income nor tries to undo one.
+                    const nextDepositPaid = depositPaid !== undefined ? Boolean(depositPaid) : null;
+                    if (nextDepositPaid !== null) {
+                        await syncTrialPayment(tx, linkedBooking, {
+                            paid: nextDepositPaid,
+                            actorId: req.user.id,
+                            paymentMethod: trialPaymentMethod,
+                        });
+                    }
                     await tx.booking.update({
                         where: { id: linkedBooking.id },
                         data: {
@@ -3111,6 +2932,15 @@ router.post('/:id/trial-analysis', authenticate, requireAdmin, async (req, res) 
             : classRecord.trialReport;
         if (!normalizedTrialReport) {
             return res.status(400).json({ success: false, error: 'Заполните анкету пробного урока перед скачиванием анализа' });
+        }
+        // Decision 03.11 (document 23): for the new diagnostic report the family gets
+        // the «Лист первого занятия», not an AI-written analysis.
+        if (isTrialReportV3(normalizedTrialReport)) {
+            return res.status(409).json({
+                success: false,
+                code: 'TRIAL_ANALYSIS_REPLACED_BY_SHEET',
+                error: 'Для анкеты нового образца ИИ-анализ не формируется.',
+            });
         }
 
         const payload = buildTrialAnalysisPayload(classRecord, normalizedTrialReport, trialBooking);

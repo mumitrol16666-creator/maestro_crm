@@ -141,7 +141,8 @@ async function writeQaActivity(prisma, action, classRecord, metadata = {}) {
 }
 
 async function createQaLesson(prisma, input) {
-    const classType = input.classType === 'group' ? 'group' : 'individual';
+    // 03.11 (document 22 §7): the stand can create a trial lesson with its booking, like the admin does.
+    const classType = ['group', 'trial'].includes(input.classType) ? input.classType : 'individual';
     const id = qaClassId(input.scenarioId);
     const schedule = parseSchedule(input);
     const teacherId = ensureAllowedFixtureId(input.teacherId || 'QA-TEACHER-1', QA_TEACHER_IDS, 'teacherId');
@@ -184,6 +185,9 @@ async function createQaLesson(prisma, input) {
             throw new QaFixtureError(409, 'QA_GROUP_EMPTY', 'QA group has no active students');
         }
         title ||= 'QA Групповой урок';
+    } else if (classType === 'trial') {
+        // A lead without a student card: the platform sees the virtual participant `trial:<classId>`.
+        title ||= 'Пробный урок — QA Лид';
     } else {
         individualStudentId = ensureAllowedFixtureId(input.studentId || 'QA-STUDENT-1', QA_STUDENT_IDS, 'studentId');
         await requireQaPerson(prisma, individualStudentId, 'student');
@@ -215,6 +219,29 @@ async function createQaLesson(prisma, input) {
                 attendanceStatus: 'unmarked',
             })),
         });
+        if (classType === 'trial') {
+            const [hours, minutes] = schedule.startTime.split(':').map(Number);
+            const scheduledAt = new Date(schedule.date);
+            scheduledAt.setHours(hours, minutes, 0, 0);
+            await tx.booking.create({
+                data: {
+                    name: 'QA',
+                    lastName: 'Лид',
+                    phone: '+77000009999',
+                    direction: String(input.direction || 'Гитара').trim().slice(0, 120) || 'Гитара',
+                    requestType: 'trial',
+                    status: 'trial',
+                    trialTeacherId: teacherId,
+                    trialRoomId: QA_ROOM_ID,
+                    trialScheduledAt: scheduledAt,
+                    trialClassId: created.id,
+                    trialFunnelStage: 'scheduled',
+                    source: 'QA',
+                    createdBy: 'qa-fixture-controller',
+                    isTest: true,
+                },
+            });
+        }
         await writeQaActivity(tx, 'qa_lesson_created', created, { attendeeIds });
         return created;
     });
@@ -341,6 +368,7 @@ async function resetQaRunFixtures(prisma) {
     const classIds = classes.map((item) => item.id);
     await prisma.$transaction(async (tx) => {
         if (classIds.length > 0) {
+            await tx.booking.deleteMany({ where: { trialClassId: { in: classIds }, createdBy: 'qa-fixture-controller' } });
             await tx.class.deleteMany({ where: { id: { in: classIds } } });
             await tx.activityLog.deleteMany({ where: { entityId: { in: classIds }, entityType: 'QaLessonFixture' } });
         }

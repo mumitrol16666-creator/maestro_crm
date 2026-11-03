@@ -1279,7 +1279,7 @@ function getScheduleSafetyChecks(classData) {
         checks.push({
             tone: 'warning',
             title: 'Пробный без анкеты преподавателя',
-            text: 'Для анализа пробного нужны поля из приложения: цель, уровень, мотивация, рекомендации и следующий шаг.',
+            text: 'Преподаватель заполняет диагностику пробного в приложении: четыре блока, что получилось, над чем поработать, что делать дома и с какой ступени начать.',
         });
     }
 
@@ -1941,7 +1941,7 @@ function renderCompletedLessonSummary(classData) {
         `).join('')
         : '<div style="opacity:0.65;">Отчёт по уроку не заполнен.</div>';
     const trialReportHtml = classData.classType === 'trial'
-        ? renderTrialReportSummaryHtml(classData.trialReport)
+        ? renderTrialReportSummaryHtml(classData.trialReport) + trialSheetButtonHtml(classData)
         : '';
 
     document.getElementById('classInfo').innerHTML = `
@@ -1980,6 +1980,7 @@ function renderCompletedLessonSummary(classData) {
             ${trialReportHtml}
         </div>
     `;
+    bindTrialSheetButtons(document.getElementById('classInfo'));
 }
 
 function buildAttendanceMembershipInfo(student) {
@@ -2242,6 +2243,7 @@ async function persistAttendanceForClass(classId, savedClassData) {
 }
 
 async function openAttendanceModal(classData) {
+    resetTrialReportV3View();
     setAttendanceFormMode('edit');
     currentBillingClassId = null;
     if (billingPreviewTimer) {
@@ -2764,7 +2766,9 @@ function getAttendanceAbsenceStatus(attendee) {
 
 function getLessonReportCompleteness(classData = currentClassForAttendance) {
     if (classData?.classType === 'trial') {
-        const trial = getTrialReportCompleteness();
+        const trial = isTrialReportV3(classData.trialReport)
+            ? getTrialReportV3Completeness(classData.trialReport)
+            : getTrialReportCompleteness();
         return {
             topic: 'Пробный урок',
             summary: trial.missing.length ? '' : 'Анкета пробного заполнена',
@@ -5011,8 +5015,93 @@ function setTrialObjections(values = []) {
     });
 }
 
+/* Trial report v3 (03.11, document 23): filled by the teacher in the app on the
+ * methodology's four diagnostic blocks. CRM shows it read-only and never sends its
+ * own older form over it. */
+const TRIAL_V3_BLOCKS = [
+    ['instrument', 'Инструмент'],
+    ['hearingPulse', 'Слух и пульс'],
+    ['movement', 'Движение'],
+    ['learnability', 'Обучаемость'],
+];
+const TRIAL_V3_LEVELS = { not_yet: 'Пока не получилось', with_hint: 'С подсказкой', independent: 'Сам' };
+
+function isTrialReportV3(report) {
+    return Boolean(report && typeof report === 'object'
+        && (Number(report.version) === 3 || (report.diagnostics && typeof report.diagnostics === 'object')));
+}
+
+function getTrialReportV3Completeness(report) {
+    const diagnostics = report?.diagnostics || {};
+    const facts = report?.lessonFacts || {};
+    const checks = [
+        ...TRIAL_V3_BLOCKS.map(([key, label]) => [label.toLowerCase(), diagnostics[key]?.level]),
+        ['получилось', facts.achieved],
+        ['поработаем', facts.difficulty],
+        ['дома', facts.homeAction],
+    ];
+    const missing = checks.filter(([, value]) => !value).map(([label]) => label);
+    return { filled: checks.length - missing.length, total: checks.length, missing };
+}
+
+function renderTrialReportV3Html(report) {
+    const profile = report.studentProfile || {};
+    const diagnostics = report.diagnostics || {};
+    const facts = report.lessonFacts || {};
+    const recommendation = report.recommendation || {};
+    const start = recommendation.startStep;
+    const plan = Array.isArray(recommendation.plan) ? recommendation.plan : [];
+    // 03.11 (document 23 §10): only what reaches the family sheet, with the sheet's words;
+    // frequency is optional and «не определено» is not shown.
+    const decided = (value) => Boolean(value) && value !== 'undecided';
+    const row = (label, value) => value ? `
+        <div class="trial-history-note"><span>${escapeHtml(label)}</span><p>${escapeHtml(value)}</p></div>` : '';
+    return `
+        <section class="trial-report-history" data-trial-report-v3>
+            <div class="trial-report-head">
+                <div>
+                    <p>Пробный урок · заполняет преподаватель в приложении</p>
+                    <h3>Диагностика первого занятия</h3>
+                </div>
+            </div>
+            <div class="trial-history-grid">
+                ${TRIAL_V3_BLOCKS.map(([key, label]) => `<div><span>${label}</span><strong>${escapeHtml(TRIAL_V3_LEVELS[diagnostics[key]?.level] || '—')}</strong></div>`).join('')}
+            </div>
+            ${row('Цель и любимая песня', profile.goalAndSong)}
+            ${row('Получилось', facts.achieved)}
+            ${row('Поработаем', facts.difficulty)}
+            ${row('Дома', facts.homeAction)}
+            ${row('С чего начнём', start ? `Ступень ${start.number} · ${start.title}` : '')}
+            ${row('План на три месяца', plan.map((step, index) => `${index + 1}-й месяц — Ступень ${step.number} · ${step.title}${step.topics?.length ? ': ' + step.topics.join(' · ') : ''}`).join('\n'))}
+            ${row('Рекомендуем заниматься', decided(recommendation.recommendedFrequency) ? formatTrialReportEnum('recommendedFrequency', recommendation.recommendedFrequency, '') : '')}
+            ${report.manager ? row('Сохранено менеджером раньше', [
+                report.manager.goalFromParent ? `Цель семьи: ${report.manager.goalFromParent}` : '',
+                report.manager.parentReaction ? `Комментарий семьи: ${report.manager.parentReaction}` : '',
+                report.manager.nextStep ? `Следующий шаг: ${formatTrialReportEnum('nextStep', report.manager.nextStep, report.manager.nextStep)}` : '',
+                report.manager.buyProbability ? `Вероятность покупки: ${report.manager.buyProbability}/5` : '',
+                report.manager.parentObjections?.length ? `Возражения: ${report.manager.parentObjections.join(', ')}` : '',
+                report.manager.adminComment ? `Комментарий админа: ${report.manager.adminComment}` : '',
+            ].filter(Boolean).join('\n')) : ''}
+        </section>
+    `;
+}
+
+/** For a v3 report the lesson fields were derived by the server from the app's report. */
+function storedTrialV3Fields(classData) {
+    if (classData?.classType !== 'trial' || !isTrialReportV3(classData.trialReport)) return {};
+    return {
+        topic: classData.topic || 'Пробный урок · диагностика',
+        lessonSummary: classData.lessonSummary || '',
+        homeworkDraft: '',
+        nextLessonFocus: classData.nextLessonFocus || '',
+        teacherComment: classData.teacherComment || '',
+    };
+}
+
 function collectTrialReport(classData = currentClassForAttendance) {
     if (!classData || classData.classType !== 'trial') return null;
+    // The app's v3 report is the source; the older CRM form must not replace it.
+    if (isTrialReportV3(classData.trialReport)) return null;
     return {
         version: 1,
         capturedAt: new Date().toISOString(),
@@ -5107,7 +5196,8 @@ function deriveTrialLessonFields(report = collectTrialReport()) {
     return {
         topic: topic || 'Пробный урок',
         lessonSummary: summary || 'Анкета пробного заполнена',
-        homeworkDraft: report.lessonFacts.homeworkGiven || '',
+        // LEARN-042 (decision 03.11): «Дали домой» is not lesson homework.
+        homeworkDraft: '',
         nextLessonFocus,
         teacherComment: report.raw.teacherFreeComment || '',
     };
@@ -5116,7 +5206,9 @@ function deriveTrialLessonFields(report = collectTrialReport()) {
 function updateTrialReportCompleteness() {
     const badge = document.getElementById('trialReportCompleteness');
     if (!badge || currentClassForAttendance?.classType !== 'trial') return;
-    const completeness = getTrialReportCompleteness();
+    const completeness = isTrialReportV3(currentClassForAttendance.trialReport)
+        ? getTrialReportV3Completeness(currentClassForAttendance.trialReport)
+        : getTrialReportCompleteness();
     badge.textContent = `${completeness.filled}/${completeness.total} заполнено`;
     badge.classList.toggle('is-ready', completeness.total > 0 && completeness.filled >= completeness.total - 1);
     renderLessonApprovalSummary();
@@ -5131,11 +5223,67 @@ function bindTrialReportInputs() {
     });
 }
 
+// Document 23, step 2: «Лист первого занятия» for the family, rendered by the backend from the v3 report.
+// The admin prints it here, the manager from the booking card, the teacher from the app.
+function trialSheetButtonHtml(classData) {
+    if (!classData || !isTrialReportV3(classData.trialReport)) return '';
+    if (!(typeof isAdmin === 'function' && isAdmin())) return '';
+    return `<div class="trial-sheet-actions"><button type="button" class="admin-btn btn-primary" data-trial-sheet-print="${escapeHtml(classData.id)}">Печать листа первого занятия</button></div>`;
+}
+
+function bindTrialSheetButtons(root) {
+    root?.querySelectorAll('[data-trial-sheet-print]').forEach((button) => {
+        button.onclick = () => printTrialSheet(button.dataset.trialSheetPrint);
+    });
+}
+
+// A lesson opened after a trial must not keep that trial's report and its print button.
+function resetTrialReportV3View() {
+    const v3View = document.getElementById('trialReportV3View');
+    if (!v3View) return;
+    v3View.innerHTML = '';
+    v3View.style.display = 'none';
+}
+
+async function printTrialSheet(classId) {
+    // Opening happens directly on the click so popup blockers do not lose the sheet.
+    const tab = window.open('', '_blank');
+    if (!tab) { toast.error('Разрешите открытие окна с листом в браузере.'); return; }
+    tab.opener = null;
+    try {
+        const response = await fetch(`${API_URL}/classes/${encodeURIComponent(classId)}/trial-sheet`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.data?.html) throw new Error(body.error || 'Не удалось открыть лист первого занятия');
+        tab.document.open(); tab.document.write(body.data.html); tab.document.close(); tab.focus(); tab.print();
+    } catch (err) {
+        tab.close();
+        toast.error(escapeHtml(err.message));
+    }
+}
+
 function renderTrialReportFields(classData) {
     const section = document.getElementById('trialReportSection');
     if (!section) return;
+    let v3View = document.getElementById('trialReportV3View');
+    if (!v3View) {
+        v3View = document.createElement('div');
+        v3View.id = 'trialReportV3View';
+        section.insertAdjacentElement('afterend', v3View);
+    }
+    v3View.innerHTML = '';
+    v3View.style.display = 'none';
     if (!classData || classData.classType !== 'trial' || classData.isPractice) {
         section.style.display = 'none';
+        return;
+    }
+    if (isTrialReportV3(classData.trialReport)) {
+        section.style.display = 'none';
+        v3View.innerHTML = renderTrialReportV3Html(classData.trialReport) + trialSheetButtonHtml(classData);
+        bindTrialSheetButtons(v3View);
+        v3View.style.display = 'block';
+        updateTrialReportCompleteness();
         return;
     }
 
@@ -5313,6 +5461,10 @@ async function handleTrialAnalysisExport(event) {
         toast.error('Анализ доступен только для пробного урока');
         return;
     }
+    if (isTrialReportV3(currentClassForAttendance.trialReport)) {
+        toast.error('Для анкеты нового образца ИИ-анализ не формируется');
+        return;
+    }
 
     const trialReport = collectTrialReport(currentClassForAttendance);
     const previousText = button.textContent;
@@ -5353,6 +5505,7 @@ function bindTrialAnalysisExportButton() {
 
 function renderTrialReportSummaryHtml(report) {
     if (!report) return '';
+    if (isTrialReportV3(report)) return renderTrialReportV3Html(report);
     const assessment = report.teacherAssessment || {};
     const recommendation = report.recommendation || {};
     const sales = report.salesSignals || {};
@@ -5496,7 +5649,9 @@ function updateAttendanceActionButtons(classData) {
         const canDownloadTrialAnalysis = typeof isAdmin === 'function'
             && isAdmin()
             && classData.classType === 'trial'
-            && classData.teacherOutcomeHint !== 'not_held';
+            && classData.teacherOutcomeHint !== 'not_held'
+            // 03.11: a v3 report gets the «Лист первого занятия», not the AI analysis.
+            && !isTrialReportV3(classData.trialReport);
         trialAnalysisBtn.style.display = canDownloadTrialAnalysis ? 'block' : 'none';
         trialAnalysisBtn.disabled = !canDownloadTrialAnalysis;
         trialAnalysisBtn.title = canDownloadTrialAnalysis
@@ -5553,13 +5708,17 @@ async function submitLessonReview() {
     const trialReport = currentClassForAttendance.classType === 'trial'
         ? collectTrialReport(currentClassForAttendance)
         : null;
-    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
-    const topic = trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '';
-    const lessonGoals = document.getElementById('lessonGoals')?.value?.trim() || '';
-    const lessonSummary = trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '';
-    const homeworkDraft = trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || '';
-    const nextLessonFocus = trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim() || '';
-    const teacherComment = trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim() || '';
+    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : storedTrialV3Fields(currentClassForAttendance);
+    // A trial has no lesson form: the modal's lesson inputs still hold the previously opened lesson
+    // (renderLessonReportFields returns early for a trial), so they must never reach this request.
+    const isTrial = currentClassForAttendance.classType === 'trial';
+    const fromForm = (id) => (isTrial ? '' : document.getElementById(id)?.value?.trim() || '');
+    const topic = trialDerived.topic || fromForm('lessonTopic');
+    const lessonGoals = fromForm('lessonGoals');
+    const lessonSummary = trialDerived.lessonSummary || fromForm('lessonSummary');
+    const homeworkDraft = isTrial ? undefined : (trialDerived.homeworkDraft || fromForm('lessonHomework'));
+    const nextLessonFocus = trialDerived.nextLessonFocus || fromForm('lessonNextFocus');
+    const teacherComment = trialDerived.teacherComment || fromForm('lessonTeacherComment');
     const teacherPenaltyAmount = Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0));
     const teacherPenaltyReason = document.getElementById('teacherPenaltyReason')?.value?.trim() || '';
 
@@ -5601,8 +5760,9 @@ function collectLessonApprovalDraft(classData = currentClassForAttendance) {
     const trialReport = classData?.classType === 'trial'
         ? collectTrialReport(classData)
         : null;
-    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : {};
-    const materials = (document.getElementById('lessonMaterials')?.value || '')
+    const trialDerived = trialReport ? deriveTrialLessonFields(trialReport) : storedTrialV3Fields(classData);
+    const isTrialClass = classData?.classType === 'trial';
+    const materials = isTrialClass ? [] : (document.getElementById('lessonMaterials')?.value || '')
         .split('\n')
         .map(url => url.trim())
         .filter(Boolean)
@@ -5616,12 +5776,13 @@ function collectLessonApprovalDraft(classData = currentClassForAttendance) {
         trialPaymentMethod: classData?.classType === 'trial'
             ? (document.getElementById('trialPaymentMethod')?.value || undefined)
             : undefined,
-        topic: trialDerived.topic || document.getElementById('lessonTopic')?.value?.trim() || '',
-        lessonGoals: document.getElementById('lessonGoals')?.value?.trim() || '',
-        lessonSummary: trialDerived.lessonSummary || document.getElementById('lessonSummary')?.value?.trim() || '',
-        homeworkDraft: trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || '',
-        nextLessonFocus: trialDerived.nextLessonFocus || document.getElementById('lessonNextFocus')?.value?.trim() || '',
-        teacherComment: trialDerived.teacherComment || document.getElementById('lessonTeacherComment')?.value?.trim() || '',
+        // A trial never takes the shared lesson inputs (they hold the previously opened lesson).
+        topic: trialDerived.topic || (isTrialClass ? '' : document.getElementById('lessonTopic')?.value?.trim() || ''),
+        lessonGoals: isTrialClass ? undefined : document.getElementById('lessonGoals')?.value?.trim() || '',
+        lessonSummary: trialDerived.lessonSummary || (isTrialClass ? '' : document.getElementById('lessonSummary')?.value?.trim() || ''),
+        homeworkDraft: isTrialClass ? undefined : (trialDerived.homeworkDraft || document.getElementById('lessonHomework')?.value?.trim() || ''),
+        nextLessonFocus: trialDerived.nextLessonFocus || (isTrialClass ? undefined : document.getElementById('lessonNextFocus')?.value?.trim() || ''),
+        teacherComment: trialDerived.teacherComment || (isTrialClass ? undefined : document.getElementById('lessonTeacherComment')?.value?.trim() || ''),
         teacherPenaltyAmount: Math.max(0, Math.round(Number(document.getElementById('teacherPenaltyAmount')?.value) || 0)),
         teacherPenaltyReason: document.getElementById('teacherPenaltyReason')?.value?.trim() || '',
         materials,

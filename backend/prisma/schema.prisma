@@ -1188,12 +1188,17 @@ model Booking {
   processedById        String?
   processedAt          DateTime?
   // Отдельная воронка после пробного урока. Не смешивается с общим статусом заявки.
-  trialFunnelStage     String? // scheduled | held | analysis_ready | contacted | thinking | sold | rejected
+  trialFunnelStage     String? // scheduled | held | analysis_ready | sheet_given | contacted | thinking | sold | rejected
   trialManagerId       String?
   trialNextAction      String?
   trialNextActionAt    DateTime?
   trialLastContactAt   DateTime?
   trialFunnelNote      String?       @db.Text
+  // Document 23, step 2: «Лист первого занятия» handed to the family (who and when marked it).
+  trialSheetGivenAt    DateTime?
+  trialSheetGivenById  String?
+  // The sheet's content as handed (decision 03.11): later prints use it, not the current report.
+  trialSheetSnapshot   Json?
   convertedToStudentId String?
   convertedById        String?
   convertedAt          DateTime?

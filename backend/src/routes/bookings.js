@@ -10,6 +10,7 @@ function parseOptionalDate(value) {
 }
 const { body, validationResult } = require('express-validator');
 const { prisma } = require('../config/db');
+const { Prisma } = require('@prisma/client');
 const { authenticate, requireAdmin, requireSalesOrAdmin } = require('../middleware/auth');
 const { passwordFields } = require('../services/passwordVault');
 const { notify } = require('../services/notifications');
@@ -24,6 +25,8 @@ const {
 } = require('../services/trialPolicy');
 const { syncTrialPayment } = require('../services/trialPayment');
 const { buildTrialInvitation } = require('../services/trialInvitation');
+const { setTrialSheetGiven, trialSheetSnapshotForClass, TrialSheetError } = require('../services/trialSheet');
+const { isTrialReportV3 } = require('../services/trialReport');
 const {
     bookingQueueWhere,
     closeBookingForStudent,
@@ -520,9 +523,14 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             }
         });
         if (!booking) return res.status(404).json({ error: 'Заявка не найдена' });
+        // The card offers «Печать листа» and «Лист отдан» only once the teacher's v3 report is in CRM.
+        const trialClass = booking.trialClassId
+            ? await prisma.class.findUnique({ where: { id: booking.trialClassId }, select: { trialReport: true } })
+            : null;
         res.json({ success: true, booking: {
             ...booking,
             _id: booking.id,
+            trialSheetAvailable: Boolean(trialClass && isTrialReportV3(trialClass.trialReport)),
             trialFunnelStage: booking.trialFunnelStage || deriveTrialFunnelStage(booking),
             trialManager: booking.trialManager ? { ...booking.trialManager, _id: booking.trialManager.id } : null,
             trialPaymentMethod: booking.cashTransactions?.[0]?.paymentMethod || null,
@@ -622,6 +630,27 @@ router.patch('/:id/data-quality', authenticate, requireAdmin, async (req, res) =
     }
 });
 
+// POST /api/bookings/:id/trial-sheet-given {given} — «Лист отдан» (document 23, step 2, decision 03.11).
+// One POST sets and removes the mark: a DELETE on bookings needs payment rights a manager may not have.
+router.post('/:id/trial-sheet-given', authenticate, requireSalesOrAdmin, async (req, res) => {
+    try {
+        const booking = await prisma.booking.findUnique({ where: { id: req.params.id }, select: { id: true, trialClassId: true } });
+        if (!booking) return res.status(404).json({ success: false, error: 'Заявка не найдена' });
+        if (!booking.trialClassId) return res.status(400).json({ success: false, code: 'NOT_A_TRIAL', error: 'У заявки нет пробного урока' });
+        const updated = await setTrialSheetGiven(prisma, booking.trialClassId, {
+            given: req.body?.given !== false,
+            actorId: req.user.isDemoUser ? null : req.user.id,
+        });
+        return res.json({ success: true, data: updated });
+    } catch (error) {
+        if (error instanceof TrialSheetError) {
+            return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+        }
+        console.error('Trial sheet given error:', error);
+        return res.status(500).json({ success: false, error: 'Не удалось сохранить отметку о листе' });
+    }
+});
+
 // PATCH /api/bookings/:id/trial-funnel — отдельная воронка после пробного урока.
 router.patch('/:id/trial-funnel', authenticate, requireSalesOrAdmin, async (req, res) => {
     try {
@@ -634,8 +663,33 @@ router.patch('/:id/trial-funnel', authenticate, requireSalesOrAdmin, async (req,
             return res.status(400).json({ success: false, error: 'Воронка доступна только для пробных заявок' });
         }
 
-        const { stage, nextAction, nextActionAt, lastContactAt, note } = req.body || {};
+        const { stage, nextAction, nextActionAt, lastContactAt, note, expectedStage } = req.body || {};
+        const currentStage = booking.trialFunnelStage || deriveTrialFunnelStage(booking) || null;
+        // The card sends the stage it was opened with: a stale form must not undo what another
+        // manager just did (for example «Лист отдан»).
+        if (expectedStage !== undefined && (expectedStage || null) !== currentStage) {
+            return res.status(409).json({ success: false, code: 'TRIAL_FUNNEL_CHANGED', error: 'Заявку только что изменили. Откройте карточку заново.' });
+        }
         const data = trialFunnelPayload({ stage, nextAction, nextActionAt, lastContactAt, note });
+        // Document 23, step 2: a trial with the app's v3 report has «Лист отдан» instead of the analysis.
+        const trialClass = booking.trialClassId
+            ? await prisma.class.findUnique({ where: { id: booking.trialClassId }, select: { trialReport: true } })
+            : null;
+        const sheetTrial = Boolean(trialClass && isTrialReportV3(trialClass.trialReport));
+        if (stage === 'sheet_given' && !sheetTrial) {
+            return res.status(409).json({ success: false, code: 'TRIAL_SHEET_NEEDS_REPORT', error: 'Этап «Лист отдан» — для пробного, по которому преподаватель отправил диагностику в приложении.' });
+        }
+        if (stage === 'analysis_ready' && sheetTrial) {
+            return res.status(409).json({ success: false, code: 'TRIAL_ANALYSIS_REPLACED_BY_SHEET', error: 'Для этого пробного вместо анализа семье отдают лист первого занятия.' });
+        }
+        // The form always sends the action and the deadline it showed; when the stage changes and
+        // those were left as they were, the new stage's defaults apply.
+        const stageChanged = stage !== undefined && stage !== currentStage;
+        const minute = (value) => (value ? Math.floor(new Date(value).getTime() / 60000) : null);
+        const actionDefault = nextAction === undefined
+            || (stageChanged && (nextAction || null) === (booking.trialNextAction || null));
+        const deadlineDefault = nextActionAt === undefined
+            || (stageChanged && minute(nextActionAt) === minute(booking.trialNextActionAt));
         const requestedStage = stage === undefined ? booking.trialFunnelStage : stage;
         if (requestedStage === 'sold' && booking.status !== 'sold' && !booking.convertedToStudentId) {
             return res.status(400).json({ success: false, error: 'Этап «Купили» устанавливается после оплаты обучения' });
@@ -647,17 +701,31 @@ router.patch('/:id/trial-funnel', authenticate, requireSalesOrAdmin, async (req,
         if (stage !== undefined && ['sold', 'rejected'].includes(stage)) {
             data.trialNextAction = 'none';
             data.trialNextActionAt = null;
-        } else if (stage !== undefined && nextAction === undefined) {
-            data.trialNextAction = defaultTrialNextAction(stage);
+        } else if (stage !== undefined && actionDefault) {
+            data.trialNextAction = stage === 'held'
+                ? (sheetTrial ? 'give_sheet' : 'prepare_analysis')
+                : defaultTrialNextAction(stage);
         }
         if (stage === 'contacted' && lastContactAt === undefined) data.trialLastContactAt = new Date();
-        if (stage && ['contacted', 'thinking'].includes(stage) && nextActionAt === undefined) {
+        if (stage && ['contacted', 'thinking'].includes(stage) && deadlineDefault) {
             data.trialNextActionAt = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
         }
-        if (stage === 'analysis_ready' && nextActionAt === undefined) {
+        if ((['analysis_ready', 'sheet_given'].includes(stage) || (stage === 'held' && sheetTrial)) && deadlineDefault) {
             data.trialNextActionAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
         }
-        if (stage === 'scheduled' && nextActionAt === undefined && booking.trialScheduledAt) {
+        // The stage and the mark tell the same story: choosing «Лист отдан» records the mark,
+        // going back to «Назначен» or «Проведён» removes it.
+        if (stage === 'sheet_given' && !booking.trialSheetGivenAt) {
+            data.trialSheetGivenAt = new Date();
+            data.trialSheetGivenById = req.user.isDemoUser ? null : req.user.id;
+            data.trialSheetSnapshot = await trialSheetSnapshotForClass(prisma, booking.trialClassId, data.trialSheetGivenAt);
+        }
+        if (stageChanged && ['scheduled', 'held'].includes(stage) && booking.trialSheetGivenAt) {
+            data.trialSheetGivenAt = null;
+            data.trialSheetGivenById = null;
+            data.trialSheetSnapshot = Prisma.DbNull;
+        }
+        if (stage === 'scheduled' && deadlineDefault && booking.trialScheduledAt) {
             data.trialNextActionAt = booking.trialScheduledAt;
         }
         if (stage === 'thinking' && booking.status !== 'sold' && booking.status !== 'rejected') data.status = 'thinking';

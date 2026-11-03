@@ -1996,7 +1996,7 @@ async function renderAnalyticsMarketing(pane) {
             }).join('')}
         </div>
 
-        ${analyticsSectionHeader('Сквозная воронка пробного', 'Заявка → проведённая диагностика → анализ → контакт → покупка. Когорта строится по дате заявки.', 'TrialFunnel')}
+        ${analyticsSectionHeader('Сквозная воронка пробного', 'Заявка → проведённая диагностика → итог для семьи (анализ или лист первого занятия) → контакт → покупка. Когорта строится по дате заявки.', 'TrialFunnel')}
         <div class="analytics-dashboard-strip analytics-dashboard-strip--compact">
             ${analyticsDashboardMetric('Заявки на пробный', analyticsFormatNumber(trialCounts.leads || 0), `${analyticsFormatPercent(trialAnalytics.conversion?.leadToScheduled || 0)} назначены`)}
             ${analyticsDashboardMetric('Проведены', analyticsFormatNumber(trialCounts.held || 0), `${analyticsFormatPercent(trialAnalytics.conversion?.scheduledToHeld || 0)} от назначенных`)}

@@ -127,6 +127,7 @@ async function loadTrialAnalyticsForPeriod(from, to) {
             trialClassId: true,
             depositPaid: true,
             trialFunnelStage: true,
+            trialSheetGivenAt: true,
             convertedToStudentId: true,
             source: true,
             direction: true,

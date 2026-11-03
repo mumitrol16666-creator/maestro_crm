@@ -13620,6 +13620,7 @@ textarea.whatsapp-message-preview {
 }
 .trial-report-section,
 .trial-report-history { background: rgba(255,255,255,.035); border: 1px solid var(--ops-border); border-radius: 16px; display: grid; gap: 14px; margin-bottom: 16px; padding: 14px; }
+.trial-sheet-actions { display: flex; justify-content: flex-end; margin: -6px 0 16px; }
 .trial-report-head { align-items: flex-start; display: flex; gap: 12px; justify-content: space-between; }
 .trial-report-head p { color: #d4a94e; font-size: .66rem; font-weight: 900; letter-spacing: .14em; margin: 0 0 5px; text-transform: uppercase; }
 .trial-report-head h3 { color: var(--admin-text); font-size: 1rem; margin: 0; }

@@ -1941,7 +1941,7 @@ function renderCompletedLessonSummary(classData) {
         `).join('')
         : '<div style="opacity:0.65;">Отчёт по уроку не заполнен.</div>';
     const trialReportHtml = classData.classType === 'trial'
-        ? renderTrialReportSummaryHtml(classData.trialReport)
+        ? renderTrialReportSummaryHtml(classData.trialReport) + trialSheetButtonHtml(classData)
         : '';
 
     document.getElementById('classInfo').innerHTML = `
@@ -1980,6 +1980,7 @@ function renderCompletedLessonSummary(classData) {
             ${trialReportHtml}
         </div>
     `;
+    bindTrialSheetButtons(document.getElementById('classInfo'));
 }
 
 function buildAttendanceMembershipInfo(student) {
@@ -2242,6 +2243,7 @@ async function persistAttendanceForClass(classId, savedClassData) {
 }
 
 async function openAttendanceModal(classData) {
+    resetTrialReportV3View();
     setAttendanceFormMode('edit');
     currentBillingClassId = null;
     if (billingPreviewTimer) {
@@ -5049,6 +5051,9 @@ function renderTrialReportV3Html(report) {
     const recommendation = report.recommendation || {};
     const start = recommendation.startStep;
     const plan = Array.isArray(recommendation.plan) ? recommendation.plan : [];
+    // 03.11 (document 23 §10): only what reaches the family sheet, with the sheet's words;
+    // frequency is optional and «не определено» is not shown.
+    const decided = (value) => Boolean(value) && value !== 'undecided';
     const row = (label, value) => value ? `
         <div class="trial-history-note"><span>${escapeHtml(label)}</span><p>${escapeHtml(value)}</p></div>` : '';
     return `
@@ -5062,18 +5067,13 @@ function renderTrialReportV3Html(report) {
             <div class="trial-history-grid">
                 ${TRIAL_V3_BLOCKS.map(([key, label]) => `<div><span>${label}</span><strong>${escapeHtml(TRIAL_V3_LEVELS[diagnostics[key]?.level] || '—')}</strong></div>`).join('')}
             </div>
-            ${TRIAL_V3_BLOCKS.map(([key, label]) => row(label, diagnostics[key]?.note)).join('')}
-            ${row('С кем пришёл', { adult: 'со взрослым', alone: 'сам' }[report.attendance?.arrivedWith] || '')}
-            ${row('Опыт до пробного', { none: 'с нуля', basic: 'немного играл', medium: 'играл уверенно', strong: 'играет хорошо' }[profile.priorExperience] || '')}
             ${row('Цель и любимая песня', profile.goalAndSong)}
             ${row('Получилось', facts.achieved)}
             ${row('Поработаем', facts.difficulty)}
             ${row('Дома', facts.homeAction)}
-            ${row('Начинаем', start ? `Ступень ${start.number} «${start.title}»` : '')}
-            ${row('План на 3 месяца', plan.map(step => `Ступень ${step.number} «${step.title}»${step.topics?.length ? ': ' + step.topics.join(', ') : ''}`).join('\n'))}
-            ${row('Формат', formatTrialReportEnum('recommendedFormat', recommendation.recommendedFormat, ''))}
-            ${row('Частота', formatTrialReportEnum('recommendedFrequency', recommendation.recommendedFrequency, ''))}
-            ${row('Заметка для школы', report.raw?.teacherNote)}
+            ${row('С чего начнём', start ? `Ступень ${start.number} · ${start.title}` : '')}
+            ${row('План на три месяца', plan.map((step, index) => `${index + 1}-й месяц — Ступень ${step.number} · ${step.title}${step.topics?.length ? ': ' + step.topics.join(' · ') : ''}`).join('\n'))}
+            ${row('Рекомендуем заниматься', decided(recommendation.recommendedFrequency) ? formatTrialReportEnum('recommendedFrequency', recommendation.recommendedFrequency, '') : '')}
             ${report.manager ? row('Сохранено менеджером раньше', [
                 report.manager.goalFromParent ? `Цель семьи: ${report.manager.goalFromParent}` : '',
                 report.manager.parentReaction ? `Комментарий семьи: ${report.manager.parentReaction}` : '',
@@ -5223,6 +5223,46 @@ function bindTrialReportInputs() {
     });
 }
 
+// Document 23, step 2: «Лист первого занятия» for the family, rendered by the backend from the v3 report.
+// The admin prints it here, the teacher from the app (the CRM route is admin-only).
+function trialSheetButtonHtml(classData) {
+    if (!classData || !isTrialReportV3(classData.trialReport)) return '';
+    if (!(typeof isAdmin === 'function' && isAdmin())) return '';
+    return `<div class="trial-sheet-actions"><button type="button" class="admin-btn btn-primary" data-trial-sheet-print="${escapeHtml(classData.id)}">Печать листа первого занятия</button></div>`;
+}
+
+function bindTrialSheetButtons(root) {
+    root?.querySelectorAll('[data-trial-sheet-print]').forEach((button) => {
+        button.onclick = () => printTrialSheet(button.dataset.trialSheetPrint);
+    });
+}
+
+// A lesson opened after a trial must not keep that trial's report and its print button.
+function resetTrialReportV3View() {
+    const v3View = document.getElementById('trialReportV3View');
+    if (!v3View) return;
+    v3View.innerHTML = '';
+    v3View.style.display = 'none';
+}
+
+async function printTrialSheet(classId) {
+    // Opening happens directly on the click so popup blockers do not lose the sheet.
+    const tab = window.open('', '_blank');
+    if (!tab) { toast.error('Разрешите открытие окна с листом в браузере.'); return; }
+    tab.opener = null;
+    try {
+        const response = await fetch(`${API_URL}/classes/${encodeURIComponent(classId)}/trial-sheet`, {
+            headers: { 'Authorization': `Bearer ${getAuthToken()}` },
+        });
+        const body = await response.json().catch(() => ({}));
+        if (!response.ok || !body.data?.html) throw new Error(body.error || 'Не удалось открыть лист первого занятия');
+        tab.document.open(); tab.document.write(body.data.html); tab.document.close(); tab.focus(); tab.print();
+    } catch (err) {
+        tab.close();
+        toast.error(escapeHtml(err.message));
+    }
+}
+
 function renderTrialReportFields(classData) {
     const section = document.getElementById('trialReportSection');
     if (!section) return;
@@ -5240,7 +5280,8 @@ function renderTrialReportFields(classData) {
     }
     if (isTrialReportV3(classData.trialReport)) {
         section.style.display = 'none';
-        v3View.innerHTML = renderTrialReportV3Html(classData.trialReport);
+        v3View.innerHTML = renderTrialReportV3Html(classData.trialReport) + trialSheetButtonHtml(classData);
+        bindTrialSheetButtons(v3View);
         v3View.style.display = 'block';
         updateTrialReportCompleteness();
         return;

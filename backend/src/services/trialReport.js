@@ -127,12 +127,10 @@ function extractTrialManagerFields(existing) {
 }
 
 function normalizeTrialReportV3(input, classRecord = {}) {
-    const attendance = input.attendance || {};
     const profile = input.studentProfile || {};
     const diagnostics = input.diagnostics || {};
     const facts = input.lessonFacts || {};
     const recommendation = input.recommendation || {};
-    const raw = input.raw || {};
     const existing = classRecord?.trialReport && typeof classRecord.trialReport === 'object'
         ? classRecord.trialReport
         : null;
@@ -142,7 +140,6 @@ function normalizeTrialReportV3(input, classRecord = {}) {
         const value = diagnostics[block] || {};
         normalizedDiagnostics[block] = {
             level: cleanTrialEnum(value.level, TRIAL_DIAGNOSTIC_LEVELS, '') || null,
-            note: cleanTrialText(value.note, 500),
         };
     }
     const startStep = cleanTrialPlanStep(recommendation.startStep);
@@ -156,12 +153,10 @@ function normalizeTrialReportV3(input, classRecord = {}) {
         classId: classRecord.id || null,
         classType: 'trial',
         capturedAt: input.capturedAt || new Date().toISOString(),
-        attendance: {
-            arrivedWith: cleanTrialEnum(attendance.arrivedWith, ['adult', 'alone', 'unknown'], 'unknown'),
-        },
+        // 03.11 (document 23 §10): only what reaches the family sheet; arrival, experience, block notes,
+        // format and the note for the school are no longer asked.
         studentProfile: {
             direction: cleanTrialText(profile.direction, 120),
-            priorExperience: cleanTrialEnum(profile.priorExperience, ['none', 'basic', 'medium', 'strong', 'unknown'], 'unknown'),
             goalAndSong: cleanTrialText(profile.goalAndSong, 1000),
         },
         diagnostics: normalizedDiagnostics,
@@ -173,11 +168,7 @@ function normalizeTrialReportV3(input, classRecord = {}) {
         recommendation: {
             startStep: startStep ? { templateId: startStep.templateId, number: startStep.number, title: startStep.title, direction: startStep.direction } : null,
             plan,
-            recommendedFormat: cleanTrialEnum(recommendation.recommendedFormat, ['group', 'individual', 'hybrid', 'undecided'], 'undecided'),
-            recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'custom', 'undecided'], 'undecided'),
-        },
-        raw: {
-            teacherNote: cleanTrialText(raw.teacherNote, 2000),
+            recommendedFrequency: cleanTrialEnum(recommendation.recommendedFrequency, ['1_per_week', '2_per_week', '3_per_week', 'undecided'], 'undecided'),
         },
         manager: extractTrialManagerFields(existing),
     };
@@ -199,16 +190,15 @@ function buildTrialReportV3DerivedFields(report) {
     const start = recommendation.startStep;
     const next = [
         start ? `Начинаем со ступени ${start.number} «${start.title}»` : '',
-        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
         recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
     ].filter(Boolean);
     return {
         topic: 'Пробный урок · диагностика',
-        lessonSummary: summary.join('\n') || report.raw?.teacherNote || 'Анкета пробного заполнена',
+        lessonSummary: summary.join('\n') || 'Анкета пробного заполнена',
         // LEARN-042: what was given home stays in the diagnostic report, it is not the lesson homework.
         homeworkDraft: '',
         nextLessonFocus: next.join('\n'),
-        teacherComment: report.raw?.teacherNote || '',
+        teacherComment: '',
     };
 }
 
@@ -348,7 +338,6 @@ function buildTrialReportDerivedFields(report) {
     ].filter(Boolean);
 
     const nextParts = [
-        recommendation.recommendedFormat && recommendation.recommendedFormat !== 'undecided' ? `Формат: ${trialDerivedLabel('recommendedFormat', recommendation.recommendedFormat)}` : '',
         recommendation.recommendedFrequency && recommendation.recommendedFrequency !== 'undecided' ? `Частота: ${trialDerivedLabel('recommendedFrequency', recommendation.recommendedFrequency)}` : '',
         recommendation.firstMonthFocus ? `Фокус: ${recommendation.firstMonthFocus}` : '',
     ].filter(Boolean);

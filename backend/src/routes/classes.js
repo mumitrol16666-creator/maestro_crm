@@ -41,6 +41,7 @@ const {
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
+const { buildTrialSheetForClass, TrialSheetError } = require('../services/trialSheet');
 const { defaultTrialNextAction } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
 const { resolveGroupBillingSelection } = require('../services/lessonBillingSelection');
@@ -2858,6 +2859,21 @@ router.post('/:id/approve', authenticate, requireAdmin, async (req, res) => {
             return res.status(error.statusCode).json({ success: false, error: error.message, code: error.code });
         }
         res.status(500).json({ success: false, error: 'Ошибка подтверждения урока' });
+    }
+});
+
+// GET /api/classes/:id/trial-sheet — «Лист первого занятия» for the family (document 23 §5.2).
+router.get('/:id/trial-sheet', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const sheet = await buildTrialSheetForClass(prisma, req.params.id);
+        res.set('Cache-Control', 'no-store');
+        return res.json({ success: true, data: sheet });
+    } catch (error) {
+        if (error instanceof TrialSheetError) {
+            return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+        }
+        console.error('trial sheet error:', error);
+        return res.status(500).json({ success: false, error: 'Не удалось подготовить лист первого занятия' });
     }
 });
 

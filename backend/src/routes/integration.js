@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { prisma } = require('../config/db');
+const { buildTrialSheetForClass, TrialSheetError } = require('../services/trialSheet');
 const { getTeacherRate, isPayableClass } = require('../services/salaryPolicy');
 const { requireIntegrationAuth } = require('../middleware/integrationAuth');
 const { createIntegrationAuditMiddleware } = require('../services/integrationJournal');
@@ -916,6 +917,20 @@ router.get('/classes/:crmClassId', async (req, res) => {
     } catch (error) {
         console.error('[integration] class card error:', error);
         return res.status(500).json({ success: false, error: 'Failed to load class' });
+    }
+});
+
+// GET /api/integration/v1/classes/:crmClassId/trial-sheet — the same «Лист первого занятия» for the app.
+router.get('/classes/:crmClassId/trial-sheet', async (req, res) => {
+    try {
+        const sheet = await buildTrialSheetForClass(prisma, req.params.crmClassId);
+        return res.json({ success: true, data: sheet });
+    } catch (error) {
+        if (error instanceof TrialSheetError) {
+            return res.status(error.status).json({ success: false, code: error.code, error: error.message });
+        }
+        console.error('[integration] trial sheet error:', error);
+        return res.status(500).json({ success: false, error: 'Failed to build the trial sheet' });
     }
 });
 

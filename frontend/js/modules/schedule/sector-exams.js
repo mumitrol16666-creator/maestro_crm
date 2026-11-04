@@ -34,6 +34,23 @@ async function loadPendingSectorExams(force = false) {
     return sectorExamQueue;
 }
 
+function groupSectorExamQueue(exams) {
+    const groups = new Map();
+    for (const exam of exams) {
+        const key = exam.sessionId || `individual:${exam.examId}`;
+        if (!groups.has(key)) groups.set(key, { key, title: exam.sessionTitle || exam.title, exams: [] });
+        groups.get(key).exams.push(exam);
+    }
+    return [...groups.values()];
+}
+
+function toggleSectorExamSession(sessionId) {
+    const inputs = [...document.querySelectorAll('input[name="sectorExamChoice"]')].filter(input => input.dataset.session === sessionId);
+    const checked = !inputs.every(input => input.checked);
+    for (const input of inputs) input.checked = checked;
+    document.getElementById('sectorExamChoices')?.dispatchEvent(new Event('change', { bubbles: true }));
+}
+
 /** Плашка «требуется назначить экзаменационный урок» в разделе подтверждения уроков. */
 async function renderSectorExamBanner(force = false) {
     const root = document.getElementById('sectorExamBanner');
@@ -63,11 +80,11 @@ async function renderSectorExamBanner(force = false) {
         </div>
         <p class="sector-exam-banner__hint">Экзамен — бесплатный дополнительный урок. Откройте расписание, нажмите на свободное время и выберите «Назначить экзамен».</p>
         <ul class="sector-exam-banner__list">
-            ${queue.exams.map(exam => `
+            ${groupSectorExamQueue(queue.exams).map(group => `
                 <li data-testid="sector-exam-pending">
-                    <span class="sector-exam-banner__student">${sectorExamEscape(exam.studentName)}</span>
-                    <span>${sectorExamEscape(exam.title)}</span>
-                    <span class="sector-exam-banner__meta">${exam.itemsCount} пунктов${exam.sentForScheduleAt ? ` · ждёт с ${sectorExamEscape(sectorExamDate(exam.sentForScheduleAt))}` : ''}</span>
+                    <span class="sector-exam-banner__student">${sectorExamEscape(group.title)}</span>
+                    <span>Экзамен готов — назначьте время · ${group.exams.length} участник(ов)</span>
+                    <span class="sector-exam-banner__meta">${group.exams.map(exam => sectorExamEscape(exam.studentName)).join(', ')}</span>
                 </li>
             `).join('')}
         </ul>
@@ -126,13 +143,18 @@ async function openSectorExamModal(options = {}) {
     }
     sectorExamTargetLesson = options.lesson || null;
     const choices = document.getElementById('sectorExamChoices');
-    choices.innerHTML = queue.exams.map((exam, index) => `
-        <label class="sector-exam-choice__item">
-            <input type="checkbox" name="sectorExamChoice" value="${sectorExamEscape(exam.examId)}"
-                data-teacher="${sectorExamEscape(exam.suggestedTeacherId || '')}" ${index === 0 && queue.exams.length === 1 ? 'checked' : ''}>
-            <span><strong>${sectorExamEscape(exam.studentName)}</strong>
-                <small>${sectorExamEscape(exam.title)} · ${exam.itemsCount} пунктов</small></span>
-        </label>`).join('');
+    choices.innerHTML = groupSectorExamQueue(queue.exams).map(group => `
+        <div class="sector-exam-choice__group">
+            <p><strong>${sectorExamEscape(group.title)}</strong> · ${group.exams.length} участник(ов)</p>
+            ${group.exams.length > 1 ? `<button type="button" class="btn-secondary" data-session="${sectorExamEscape(group.key)}" onclick="toggleSectorExamSession(this.dataset.session)">Выбрать всех участников этого экзамена</button>` : ''}
+            ${group.exams.map(exam => `
+                <label class="sector-exam-choice__item">
+                    <input type="checkbox" name="sectorExamChoice" value="${sectorExamEscape(exam.examId)}"
+                        data-session="${sectorExamEscape(group.key)}" data-teacher="${sectorExamEscape(exam.suggestedTeacherId || '')}" ${queue.exams.length === 1 ? 'checked' : ''}>
+                    <span><strong>${sectorExamEscape(exam.studentName)}</strong>
+                        <small>${exam.itemsCount} заданий${Number.isFinite(exam.durationMinutes) ? ` · ориентир ${exam.durationMinutes} мин на ученика` : ''}</small></span>
+                </label>`).join('')}
+        </div>`).join('');
 
     const target = document.getElementById('sectorExamTarget');
     const slotFields = document.getElementById('sectorExamSlotFields');

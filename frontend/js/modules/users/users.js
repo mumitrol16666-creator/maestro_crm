@@ -335,7 +335,8 @@ async function openUserModal(userId) {
         document.getElementById('userMonthlySalary').value = Number(user.monthlySalary || 0);
         document.getElementById('userSalesCommissionPercent').value = Number(user.salesCommissionPercent || 0);
         document.getElementById('userEmploymentStartDate').value = userDateInputValue(user.employmentStartDate);
-        document.getElementById('userPayrollEnabled').checked = Boolean(
+        document.getElementById('userEmploymentEndDate').value = userDateInputValue(user.employmentEndDate);
+        document.getElementById('userPayrollEnabled').checked = user.status !== 'inactive' && Boolean(
             user.payrollEnabled
             || Number(user.monthlySalary || 0) > 0
             || Number(user.salesCommissionPercent || 0) > 0
@@ -1159,6 +1160,7 @@ function initUserHandlers() {
                         10
                     );
                     body.employmentStartDate = document.getElementById('userEmploymentStartDate')?.value || null;
+                    body.employmentEndDate = document.getElementById('userEmploymentEndDate')?.value || null;
                 }
 
                 if (newRole !== currentRole && newRole !== 'teacher') {

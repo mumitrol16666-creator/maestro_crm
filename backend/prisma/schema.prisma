@@ -217,6 +217,8 @@ model Student {
   monthlySalary          Int       @default(0)
   salesCommissionPercent Int       @default(0)
   employmentStartDate    DateTime?
+  // First date without automatic fixed salary / sales commission. Historical earnings remain.
+  employmentEndDate      DateTime?
 
   // Discounts / family / referral
   familyId            String?

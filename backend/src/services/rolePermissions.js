@@ -64,7 +64,7 @@ function requiredPermissions(req, targetRole) {
     if (resource === 'users') {
         if (parts.includes('provision-platform') || parts.includes('provision-all')) add('canCreateUsers');
         if (targetRole === 'student' || req.body?.role === 'student') add('canManageStudents');
-        if (['salaryIndividual', 'salaryGroup', 'salaryOther', 'monthlySalary', 'salesCommissionPercent', 'payrollEnabled', 'employmentStartDate'].some(key => Object.hasOwn(req.body || {}, key))) add('canManagePayments');
+        if (['salaryIndividual', 'salaryGroup', 'salaryOther', 'monthlySalary', 'salesCommissionPercent', 'payrollEnabled', 'employmentStartDate', 'employmentEndDate'].some(key => Object.hasOwn(req.body || {}, key))) add('canManagePayments');
         if (req.method === 'DELETE') add('canDeleteUsers');
         if (req.method === 'POST' && (!parts[3] || ['teachers', 'admins', 'sales-managers', 'staff'].includes(parts[3]) && !parts[4])) add('canCreateUsers');
         if (action === 'change-role') add('canEditRoles');

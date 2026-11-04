@@ -104,6 +104,14 @@ function applyStaffPayrollSettings(data, values = {}, { defaultEnabled = false }
         if (date === undefined) return 'Некорректная дата начала работы';
         data.employmentStartDate = date;
     }
+    if (values.employmentEndDate !== undefined) {
+        const date = normalizeEmploymentDate(values.employmentEndDate);
+        if (date === undefined) return 'Некорректная дата завершения работы';
+        data.employmentEndDate = date;
+    }
+    if (data.employmentStartDate && data.employmentEndDate && data.employmentEndDate < data.employmentStartDate) {
+        return 'Дата завершения работы не может быть раньше даты начала';
+    }
     return null;
 }
 
@@ -142,6 +150,12 @@ async function deactivateUserAccount(userId, expectedRoles = []) {
     }
 
     const data = { status: 'inactive' };
+    if (user.role !== 'student') {
+        data.payrollEnabled = false;
+        data.employmentEndDate = user.employmentEndDate || normalizeEmploymentDate(
+            new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Aqtobe' }).format(new Date()),
+        );
+    }
     if (user.role === 'teacher') {
         data.teacherScheduleColor = null;
     }
@@ -163,6 +177,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
             salaryIndividual, salaryGroup, salaryOther,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
@@ -181,6 +196,7 @@ router.post('/teachers', authenticate, requireAdmin, async (req, res) => {
             monthlySalary,
             salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         }, { defaultEnabled: true });
         if (payrollError) return res.status(400).json({ success: false, error: payrollError });
         const user = await prisma.student.create({
@@ -331,18 +347,7 @@ router.delete('/teachers/:id', authenticate, requireSuperAdmin, async (req, res)
             return res.status(400).json({ success: false, error: `Невозможно удалить преподавателя. Сначала отвяжите его от ${activeGroupsCount} активной(ых) групп(ы).` });
         }
 
-        // Отвязываем от неактивных групп (удаленных), чтобы избежать ошибки внешнего ключа
-        await prisma.group.updateMany({
-            where: { teacherId, isActive: false },
-            data: { teacherId: null }
-        });
-
-        // Отвязываем от занятий, чтобы не блокировать удаление (если они были)
-        await prisma.class.updateMany({
-            where: { teacherId },
-            data: { teacherId: null }
-        });
-
+        // Deactivation preserves lesson and payroll history; no foreign keys need removal.
         await deactivateUserAccount(teacherId, ['teacher']);
         res.json({ success: true, message: `Преподаватель "${teacher.name} ${teacher.lastName || ''}" деактивирован` });
     } catch (error) {
@@ -361,6 +366,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
             name, lastName, middleName, phone, password, gender,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
@@ -375,6 +381,7 @@ router.post('/admins', authenticate, requireSuperAdmin, async (req, res) => {
             monthlySalary,
             salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         });
         if (payrollError) return res.status(400).json({ success: false, error: payrollError });
         const user = await prisma.student.create({
@@ -430,6 +437,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
             name, lastName, middleName, phone, password, gender,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         if (!name || !lastName || !phone || !password) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
 
@@ -444,6 +452,7 @@ router.post('/sales-managers', authenticate, requireAdmin, async (req, res) => {
             monthlySalary,
             salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         });
         if (payrollError) return res.status(400).json({ success: false, error: payrollError });
         const user = await prisma.student.create({
@@ -470,6 +479,7 @@ router.post('/staff', authenticate, requireAdmin, async (req, res) => {
             name, lastName, middleName, phone, password, gender,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         if (!name || !lastName || !phone || !password || !String(staffPosition || '').trim()) {
             return res.status(400).json({
@@ -493,6 +503,7 @@ router.post('/staff', authenticate, requireAdmin, async (req, res) => {
             monthlySalary,
             salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         }, { defaultEnabled: true });
         if (payrollError) return res.status(400).json({ success: false, error: payrollError });
 
@@ -605,6 +616,7 @@ router.get('/', authenticate, requireAdmin, async (req, res) => {
                     monthlySalary: true,
                     salesCommissionPercent: true,
                     employmentStartDate: true,
+                    employmentEndDate: true,
                     appUserId: true,
                     externalLinkStatus: true,
                     lostAt: true,
@@ -638,6 +650,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             teacherScheduleColor, teacherWeeklyHours,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         if (!name || !lastName || !phone || !password || !role) return res.status(400).json({ success: false, error: 'Все поля обязательны' });
         const validRoles = ['admin', 'super_admin', 'sales_manager', 'staff', 'teacher', 'student'];
@@ -664,6 +677,7 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
                 monthlySalary,
                 salesCommissionPercent,
                 employmentStartDate,
+                employmentEndDate,
             }, { defaultEnabled: role === 'teacher' || role === 'staff' });
             if (payrollError) return res.status(400).json({ success: false, error: payrollError });
         }
@@ -705,6 +719,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             salaryIndividual, salaryGroup, salaryOther,
             staffPosition, payrollEnabled, monthlySalary, salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         } = req.body;
         const hasPayrollUpdates = [
             staffPosition,
@@ -712,9 +727,10 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
             monthlySalary,
             salesCommissionPercent,
             employmentStartDate,
+            employmentEndDate,
         ].some(value => value !== undefined);
         const currentUser = await prisma.student.findUnique({
-            where: { id: req.params.id }, select: { role: true, phone: true, status: true },
+            where: { id: req.params.id }, select: { role: true, phone: true, status: true, employmentStartDate: true, employmentEndDate: true },
         });
         if (!currentUser) {
             return res.status(404).json({ success: false, error: 'Пользователь не найден' });
@@ -775,6 +791,7 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
                     monthlySalary: 0,
                     salesCommissionPercent: 0,
                     employmentStartDate: null,
+                    employmentEndDate: null,
                 });
             } else {
                 const payrollError = applyStaffPayrollSettings(data, {
@@ -783,9 +800,20 @@ router.put('/:id', authenticate, requireAdmin, async (req, res) => {
                     monthlySalary,
                     salesCommissionPercent,
                     employmentStartDate,
+                    employmentEndDate,
                 }, { defaultEnabled: role !== undefined && ['teacher', 'staff'].includes(finalRole) });
                 if (payrollError) return res.status(400).json({ success: false, error: payrollError });
             }
+        }
+        if (status === 'inactive' && currentUser.status !== 'inactive' && finalRole !== 'student') {
+            data.payrollEnabled = false;
+            data.employmentEndDate = data.employmentEndDate || currentUser.employmentEndDate
+                || normalizeEmploymentDate(new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Aqtobe' }).format(new Date()));
+        }
+        const effectiveStart = data.employmentStartDate === undefined ? currentUser.employmentStartDate : data.employmentStartDate;
+        const effectiveEnd = data.employmentEndDate === undefined ? currentUser.employmentEndDate : data.employmentEndDate;
+        if (effectiveStart && effectiveEnd && effectiveEnd < effectiveStart) {
+            return res.status(400).json({ success: false, error: 'Дата завершения работы не может быть раньше даты начала' });
         }
         if (password) Object.assign(data, await passwordFields(password));
 

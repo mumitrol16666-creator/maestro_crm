@@ -337,7 +337,7 @@ function renderSalaryTeachers(employees) {
                             onclick="openSalaryDetails('${salaryEsc(employeeId)}')">
                         ${salaryEsc(employeeName)}
                     </button>
-                    <small class="salary-position">${salaryEsc(employee.position || 'Сотрудник')}</small>
+                    <small class="salary-position">${salaryEsc(employee.position || 'Сотрудник')}${employee.isInactive ? ' · Уволен' : ''}</small>
                     ${employee.anomalies > 0
                         ? `<span class="salary-row-warning">${salaryIcon('alert', 14)} ${employee.anomalies}</span>`
                         : ''}
@@ -622,7 +622,7 @@ function openSalaryDetails(employeeId) {
                 <div>
                     <span>${salaryEsc(salaryPeriodLabel())}</span>
                     <h3>${salaryEsc(employeeName)}</h3>
-                    <small>${salaryEsc(employee.position || 'Сотрудник')}</small>
+                    <small>${salaryEsc(employee.position || 'Сотрудник')}${employee.isInactive ? ' · Уволен' : ''}</small>
                 </div>
                 <button type="button" class="salary-icon-btn" title="Закрыть" data-salary-close>
                     ${salaryIcon('close', 20)}

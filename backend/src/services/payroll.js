@@ -158,7 +158,13 @@ async function reconcileLockedClassPayrollAdjustment(db, classId, actorId, now =
     return { ...adjustment, status: 'created', operation };
 }
 
-function calculateFixedSalaryForRange(monthlySalary, rangeStart, rangeEnd, employmentStartDate = null) {
+function calculateFixedSalaryForRange(monthlySalary, rangeStart, rangeEnd, employmentStartDate = null, employmentEndDate = null) {
+    if (employmentEndDate) {
+        const cutoff = new Date(employmentEndDate);
+        if (Number.isNaN(cutoff.getTime())) return 0;
+        if (cutoff < rangeEnd) rangeEnd = cutoff;
+    }
+    if (rangeStart >= rangeEnd) return 0;
     const salary = roundMoney(monthlySalary);
     if (salary <= 0) return 0;
 
@@ -481,6 +487,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         ...(employeeId ? { id: employeeId } : {}),
         OR: [
             { role: 'teacher' },
+            { status: 'inactive' },
             { payrollEnabled: true },
             { monthlySalary: { gt: 0 } },
             { salesCommissionPercent: { gt: 0 } },
@@ -511,6 +518,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
             monthlySalary: true,
             salesCommissionPercent: true,
             employmentStartDate: true,
+            employmentEndDate: true,
         },
         orderBy: [{ lastName: 'asc' }, { name: 'asc' }],
     });
@@ -593,7 +601,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
                     amount: true,
                     status: true,
                     paymentDate: true,
-                    relatedPayment: { select: { managerId: true } },
+                    relatedPayment: { select: { managerId: true, paymentDate: true } },
                 },
                 orderBy: [{ paymentDate: 'asc' }, { createdAt: 'asc' }],
             })
@@ -609,6 +617,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
                 teacherId: id,
                 teacherName: name,
                 role: employee?.role || null,
+                isInactive: employee?.status === 'inactive',
                 position: employee?.staffPosition || (employee?.role === 'teacher' ? 'Преподаватель' : 'Сотрудник'),
                 lessons: 0,
                 lessonEarnings: 0,
@@ -637,10 +646,11 @@ async function buildPayrollRegister(db, range, employeeId = null) {
     for (const employee of employees) {
         const row = ensureRow(employee.id, formatPersonName(employee), employee);
         row.fixedSalary = calculateFixedSalaryForRange(
-            employee.monthlySalary,
+            employee.status === 'inactive' && !employee.employmentEndDate ? 0 : employee.monthlySalary,
             range.start,
             range.end,
             employee.employmentStartDate,
+            employee.employmentEndDate,
         );
         if (row.fixedSalary > 0) {
             row.timeline.push({
@@ -657,12 +667,20 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         }
     }
 
+    const employeesById = new Map(employees.map(employee => [employee.id, employee]));
     for (const payment of payments) {
         const ownerId = payment.status === 'refunded'
             ? payment.relatedPayment?.managerId || payment.managerId
             : payment.managerId;
         const row = rows.get(ownerId);
         if (!row || row.salesCommissionPercent <= 0) continue;
+        const employee = employeesById.get(ownerId);
+        const commissionDate = payment.status === 'refunded'
+            ? payment.relatedPayment?.paymentDate || payment.paymentDate
+            : payment.paymentDate;
+        if (employee?.employmentStartDate && commissionDate < employee.employmentStartDate) continue;
+        if (employee?.employmentEndDate && commissionDate >= employee.employmentEndDate) continue;
+        if (employee?.status === 'inactive' && !employee.employmentEndDate) continue;
         row.salesBase += payment.status === 'refunded'
             ? -roundMoney(payment.amount)
             : roundMoney(payment.amount);
@@ -820,7 +838,9 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         row.timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    const employeeRows = Array.from(rows.values());
+    // Former employees remain visible for real historical activity only.
+    const employeeRows = Array.from(rows.values())
+        .filter(row => !row.isInactive || row.timeline.length > 0);
     const totals = employeeRows.reduce((acc, row) => {
         acc.employees += 1;
         if (row.role === 'teacher') acc.teachers += 1;

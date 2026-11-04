@@ -82,6 +82,7 @@ if (!process.env.TEST_DATABASE_URL) {
    ['POST',`/api/users/${student.id}/reset-password`,{},'canManageStudents'],
    ['PATCH',`/api/users/teachers/${student.id}`,{name:'Changed'},'canManageStudents'],
    ['PUT',`/api/users/${admin.id}`,{monthlySalary:100000},'canManagePayments'],
+   ['PUT',`/api/users/${admin.id}`,{employmentEndDate:'2026-09-01'},'canManagePayments'],
    ['PATCH','/api/users/teachers/teacher',{salaryIndividual:1000},'canManagePayments'],
    ['POST','/api/students',{groupId:'group'},'canManageGroups'],
    ['PUT','/api/students/student',{assignedTeacherId:'teacher'},'canManageSchedule'],

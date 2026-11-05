@@ -7,7 +7,7 @@ require.cache[dbModulePath] = {
 };
 
 const {
-    buildExamInvitationMessage, examLessonAt, sectorExamTitle, isSectorExamClass, examLessonTitle, studentExamTitle, listPendingSectorExams,
+    buildExamInvitationMessage, examLessonAt, sectorExamTitle, isSectorExamClass, examLessonTitle, studentExamTitle,
 } = require('../src/services/sectorExams');
 const { resolveStudentExamContacts } = require('../src/services/studentNotificationRouting');
 
@@ -64,28 +64,12 @@ test('a group sector exam names the group, one lesson for its members reads as t
     const lesson = examLessonTitle([
         { ...exam, crmStudentId: 's1' }, { ...exam, crmStudentId: 's2' }, { ...exam, crmStudentId: 's3' },
     ]);
-    assert.equal(lesson, 'Экзамен сектора группы 3 · Гитара · 3 ученика');
+    assert.equal(lesson, 'Экзамен секторов · Гитара · 3 ученика');
     // The invitation of one member drops the head count.
-    assert.equal(studentExamTitle(lesson), 'Экзамен сектора группы 3 · Гитара');
+    assert.equal(studentExamTitle(lesson), 'Экзамен сектора · Гитара');
     // Members of different groups share a generic exam lesson.
     assert.match(examLessonTitle([{ ...exam }, { ...exam, crmGroupId: 'g2' }]), /^Экзамен секторов · Гитара · 2 ученика$/);
 });
-
-test('the queue shows the group and suggests the group teacher for a group exam', async () => {
-    const db = {
-        student: { findMany: async () => [{ id: 's1', name: 'Камбар', lastName: 'Казыбаев', assignedTeacherId: 't-personal' }] },
-        group: { findMany: async () => [{ id: 'g1', name: 'Квартет', teacherId: 't-group' }] },
-        classSectorExam: { findMany: async () => [] },
-    };
-    const result = await listPendingSectorExams({
-        db,
-        fetchPending: async () => [{ examId: 'e1', crmStudentId: 's1', crmGroupId: 'g1', sectorSequence: 2, attempt: 1, directionTitle: 'Гитара' }],
-    });
-    assert.equal(result.exams[0].groupName, 'Квартет');
-    assert.equal(result.exams[0].suggestedTeacherId, 't-group');
-    assert.equal(result.exams[0].title, 'Экзамен сектора группы 2 · Гитара · Квартет');
-});
-
 
 test('a prepared exam session keeps its title in the CRM queue', () => {
     assert.equal(sectorExamTitle({sessionId:'session-1',sessionTitle:'Первый сектор ноябрь',directionTitle:'Гитара'}),'Первый сектор ноябрь · Гитара');

@@ -135,12 +135,44 @@ if (!process.env.TEST_DATABASE_URL) {
 
         // The same exam is not booked twice; the call re-sends the confirmation instead.
         platform.pending = [exam];
-        const again = await request(`/sector-exams/${exam.examId}/schedule`, { method: 'POST', body: { ...slot, startTime: '15:00', endTime: '16:00' } });
+        const changed = await request(`/sector-exams/${exam.examId}/schedule`, { method: 'POST', body: { ...slot, startTime: '15:00', endTime: '16:00' } });
+        assert.equal(changed.status, 409);
+        assert.equal(changed.body.code, 'SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT');
+        const again = await request(`/sector-exams/${exam.examId}/schedule`, { method: 'POST', body: slot });
         assert.equal(again.status, 200);
         assert.equal(again.body.alreadyBooked, true);
         assert.equal(await prisma.classSectorExam.count({ where: { sectorExamId: exam.examId } }), 1);
         const filtered = await request('/sector-exams/pending');
         assert.equal(filtered.body.exams.length, 0, 'a booked exam leaves the queue even before the platform catches up');
+    });
+
+    test('the app books through an authenticated integration with ordinary CRM conflict checks', async () => {
+        async function integration(path, method = 'GET', body, system = 'learning-platform', token = process.env.INTEGRATION_SERVICE_SECRET) {
+            const response = await fetch(`${baseUrl}/integration/v1${path}`, { method, headers: { Authorization: `Bearer ${token}`, 'X-Integration-System': system, 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
+            return { status: response.status, body: await response.json() };
+        }
+        assert.equal((await integration('/exam-scheduling-options', 'GET', undefined, 'learning-platform', 'wrong')).status,401);
+        assert.equal((await integration('/exam-scheduling-options', 'GET', undefined, 'crm')).status,403);
+        const options = await integration('/exam-scheduling-options');
+        assert.equal(options.status,200);
+        assert.ok(options.body.data.teachers.some(row=>row.id===teacher.id));
+        assert.ok(options.body.data.rooms.some(row=>row.id===room.id));
+        const exam=pendingExam(); platform.pending=[exam];
+        const slot={examIds:[exam.examId], date:day(10), startTime:'10:00',endTime:'11:00',teacherId:teacher.id,roomId:room.id};
+        assert.equal((await integration('/sector-exams/book','POST',slot,'crm')).status,403);
+        assert.equal((await integration('/sector-exams/book','POST',{...slot,examIds:['invalid']})).status,400);
+        const before=(await prisma.student.findUnique({where:{id:student.id}})).accountBalance;
+        const booked=await integration('/sector-exams/book','POST',slot);
+        assert.equal(booked.status,200,JSON.stringify(booked.body));
+        assert.equal(booked.body.data.class.classType,'exam');
+        assert.equal(booked.body.data.class.price,0);
+        assert.equal((await integration('/sector-exams/book','POST',slot)).body.data.alreadyBooked,true);
+        assert.equal(await prisma.classSectorExam.count({where:{sectorExamId:exam.examId}}),1);
+        assert.equal((await prisma.student.findUnique({where:{id:student.id}})).accountBalance,before);
+        const other=pendingExam({crmStudentId:classmate.id});platform.pending=[other];
+        const conflict=await integration('/sector-exams/book','POST',{...slot,examIds:[other.examId]});
+        assert.equal(conflict.status,409,JSON.stringify(conflict.body));
+        assert.equal(conflict.body.code,'CLASS_SCHEDULE_CONFLICT');
     });
 
     test('the slot must be free and the exam must still be waiting', async () => {

@@ -1014,11 +1014,15 @@ async function getClassStudents(crmClassId) {
                 classId: { not: cls.id },
                 class: {
                     status: 'completed',
-                    date: { lte: cls.date },
+                    OR: [
+                        { date: { lt: cls.date } },
+                        { date: cls.date, startTime: { lt: cls.startTime } },
+                    ],
                     ...(cls.groupId
                         ? { groupId: cls.groupId }
                         : {
-                            teacherId: cls.teacherId,
+                            // Homework belongs to the student's lesson history,
+                            // including lessons held by a substitute or a former teacher.
                             individualStudentId: { in: realStudentIds },
                         }),
                 },
@@ -1045,7 +1049,7 @@ async function getClassStudents(crmClassId) {
                     },
                 },
             },
-            orderBy: [{ class: { date: 'desc' } }, { markedAt: 'desc' }],
+            orderBy: [{ class: { date: 'desc' } }, { class: { startTime: 'desc' } }, { markedAt: 'desc' }],
             take: Math.max(20, realStudentIds.length * 5),
         });
         const recentByStudent = buildRecentLessonsByStudent(previousAttendances, attendeeByStudent);

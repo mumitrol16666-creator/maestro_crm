@@ -89,4 +89,24 @@ test('the queue shows the group and suggests the group teacher for a group exam'
 
 test('a prepared exam session keeps its title in the CRM queue', () => {
     assert.equal(sectorExamTitle({sessionId:'session-1',sessionTitle:'Первый сектор ноябрь',directionTitle:'Гитара'}),'Первый сектор ноябрь · Гитара');
+    assert.equal(examLessonTitle(Array.from({length:6},()=>({sessionId:'session-1',sessionTitle:'Переход в квартеты'}))),'Переход в квартеты · 6 учеников');
+});
+
+
+test('a retry preserves its single booked lesson, reports failed confirmation, and refuses a different appointment', async () => {
+    const { bookSectorExams } = require('../src/services/sectorExams');
+    const booked = {id:'lesson',date:new Date('2026-11-20'),startTime:'10:00',endTime:'11:00',teacherId:'teacher',roomId:'room'};
+    const db = {classSectorExam:{findMany:async()=>['e1','e2','e3','e4','e5','e6'].map(id=>({sectorExamId:id,classId:'lesson',class:booked}))}};
+    const input={examIds:['e1','e2','e3','e4','e5','e6'],date:'2026-11-20',startTime:'10:00',endTime:'11:00',teacherId:'teacher',roomId:'room'};
+    let calls=0;
+    const result=await bookSectorExams(input,{db,confirmSchedule:async()=>{calls++;}});
+    assert.equal(result.class.id,'lesson');assert.equal(result.alreadyBooked,true);assert.equal(calls,6);
+    assert.equal((await bookSectorExams(input,{db,confirmSchedule:async()=>{throw Error('unavailable');}})).platformConfirmed,false);
+    await assert.rejects(bookSectorExams({...input,startTime:'12:00'},{db}),error=>error.code==='SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT');
+});
+
+test('pupils booked into different lessons are not silently combined on a retry',async()=>{
+    const {bookSectorExams}=require('../src/services/sectorExams');
+    const db={classSectorExam:{findMany:async()=>[{classId:'a',sectorExamId:'e1',class:{id:'a'}},{classId:'b',sectorExamId:'e2',class:{id:'b'}}]}};
+    await assert.rejects(bookSectorExams({examIds:['e1','e2']},{db}),error=>error.code==='SECTOR_EXAM_ALREADY_BOOKED');
 });

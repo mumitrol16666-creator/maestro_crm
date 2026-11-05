@@ -88,6 +88,43 @@ const STAFF_TASK_INCLUDE = {
 router.use(requireIntegrationAuth);
 router.use(createIntegrationAuditMiddleware());
 
+// Scheduling from the app uses the same CRM conflicts and accounting rules as its calendar.
+router.get('/exam-scheduling-options', async (req, res) => {
+    if (req.integrationSystem !== 'learning-platform') return res.status(403).json({success:false,error:'Learning platform required'});
+    try {
+        const [teachers, rooms] = await Promise.all([
+            prisma.student.findMany({where:{role:'teacher',status:'active'},select:{id:true,name:true,lastName:true,middleName:true},orderBy:{lastName:'asc'}}),
+            prisma.room.findMany({where:{isActive:true},select:{id:true,name:true,workingStart:true,workingEnd:true},orderBy:{name:'asc'}}),
+        ]);
+        res.json({success:true,data:{teachers:teachers.map(t=>({id:t.id,name:formatIntegrationFio(t)})),rooms}});
+    } catch {res.status(500).json({success:false,error:'Не удалось загрузить преподавателей и кабинеты'});}
+});
+
+router.post('/sector-exams/book', async (req, res) => {
+    if (req.integrationSystem !== 'learning-platform') return res.status(403).json({success:false,error:'Learning platform required'});
+    try {
+        const {examIds,date,startTime,endTime,teacherId,roomId,actorAppUserId}=req.body||{};
+        if (!Array.isArray(examIds) || !examIds.length || examIds.length>20 || examIds.some(id=>typeof id!=='string'||!/^[-a-f0-9]{36}$/i.test(id))) {
+            return res.status(400).json({success:false,error:'Выберите от 1 до 20 участников экзамена'});
+        }
+        if (typeof date!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(date)
+            || typeof startTime!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(startTime)
+            || typeof endTime!=='string'||!/^([01]\d|2[0-3]):[0-5]\d$/.test(endTime)) {
+            return res.status(400).json({success:false,error:'Укажите дату и время экзамена'});
+        }
+        const actor = typeof actorAppUserId==='string' ? await prisma.student.findFirst({where:{appUserId:actorAppUserId,role:{in:['admin','super_admin']},status:'active'},select:{id:true}}) : null;
+        const {bookSectorExams}=require('../services/sectorExams');
+        const result=await bookSectorExams({examIds,date,startTime,endTime,teacherId,roomId,actorId:actor?.id||null});
+        if (!result.alreadyBooked) {
+            require('../services/notifications').notify('sector_exam.scheduled',{classRecord:result.class,exams:result.exams,added:result.addedToExisting}).catch(()=>{});
+            req.app.get('io')?.emit('sector_exam_scheduled',{classId:result.class.id});
+        }
+        res.json({success:true,data:{class:result.class,alreadyBooked:result.alreadyBooked,platformConfirmed:result.platformConfirmed}});
+    } catch (error) {
+        res.status(error.statusCode||500).json({success:false,error:error.statusCode?error.message:'Не удалось назначить экзамен',code:error.code});
+    }
+});
+
 router.get('/users/:id/session-state', async (req, res) => {
     try {
         const { getLinkedAccountSession } = require('../services/accountSession');

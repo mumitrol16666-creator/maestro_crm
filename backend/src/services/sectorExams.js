@@ -147,6 +147,9 @@ function examLessonTitle(exams) {
     const count = exams.length;
     const students = count % 10 === 1 && count % 100 !== 11 ? 'ученик'
         : [2, 3, 4].includes(count % 10) && ![12, 13, 14].includes(count % 100) ? 'ученика' : 'учеников';
+    if (exams[0].sessionId && exams[0].sessionTitle && exams.every(exam => exam.sessionId === exams[0].sessionId)) {
+        return `${exams[0].sessionTitle} · ${count} ${students}`;
+    }
     // Plan 1.13: the members of one group sitting their group sector exam together.
     const groups = new Set(exams.map((exam) => exam.crmGroupId || ''));
     if (groups.size === 1 && exams[0].crmGroupId) {
@@ -203,9 +206,18 @@ async function bookSectorExams(input, deps = {}) {
         where: { sectorExamId: { in: examIds }, class: { status: { not: 'cancelled' } } },
         include: { class: true },
     });
-    if (already.length === examIds.length && already.every((row) => !input.classId || row.classId === input.classId)) {
-        await Promise.all(already.map((row) => confirmSchedule(row.class, row.sectorExamId).catch(() => null)));
-        return { class: already[0].class, exams: [], alreadyBooked: true, platformConfirmed: true };
+    if (already.length === examIds.length && already.every((row) => row.classId === already[0].classId && (!input.classId || row.classId === input.classId))) {
+        const booked = already[0].class;
+        const differentSlot = !input.classId && (
+            (input.date && scheduleDateKey(booked.date) !== scheduleDateKey(normalizeScheduleDate(input.date)))
+            || (input.startTime && input.startTime !== booked.startTime)
+            || (input.endTime && input.endTime !== booked.endTime)
+            || (input.teacherId && input.teacherId !== booked.teacherId)
+            || (input.roomId && input.roomId !== booked.roomId)
+        );
+        if (differentSlot) throw scheduleError('Этот экзамен уже назначен на другое время. Измените его в расписании CRM.',409,'SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT');
+        const confirmations = await Promise.allSettled(already.map((row) => confirmSchedule(row.class, row.sectorExamId)));
+        return { class: booked, exams: [], alreadyBooked: true, platformConfirmed: confirmations.every(result => result.status === 'fulfilled') };
     }
     if (already.length) {
         throw scheduleError('Часть экзаменов уже назначена. Обновите список.', 409, 'SECTOR_EXAM_ALREADY_BOOKED');
@@ -294,9 +306,11 @@ async function bookSectorExams(input, deps = {}) {
             const title = examLessonTitle(Array.from({ length: linked }, () => ({ directionTitle: direction })));
             lessonRow = await tx.class.update({ where: { id: row.id }, data: { title, individualStudentId: null } });
         }
-        await tx.activityLog.create({
+        // App coordinators may not have a CRM staff card. The integration journal and
+        // platform audit retain their action; never invent a CRM user for its FK.
+        if (input.actorId) await tx.activityLog.create({
             data: {
-                userId: input.actorId || 'system',
+                userId: input.actorId,
                 action: 'sector_exam_scheduled',
                 entityType: 'Class',
                 entityId: row.id,

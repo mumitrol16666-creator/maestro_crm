@@ -1398,7 +1398,7 @@ function renderScheduleDetails(classData) {
         <div class="schedule-detail-actions">
             <button type="button" class="schedule-action is-primary" data-schedule-action="open">Открыть урок</button>
             ${!['completed', 'cancelled'].includes(classData.status) ? '<button type="button" class="schedule-action" data-schedule-action="conduct">Провести</button>' : ''}
-            ${classData.classType === 'exam' && classData.status === 'scheduled' ? '<button type="button" class="schedule-action" data-schedule-action="add-exam">Добавить экзамен</button>' : ''}
+            ${classData.classType === 'exam' ? '<a class="schedule-action" href="https://app.maestro.com.kz/admin/sector-exams" target="_blank" rel="noopener">Открыть экзамены в приложении</a>' : ''}
             ${canCancel ? '<button type="button" class="schedule-action is-danger" data-schedule-action="cancel">Отменить</button>' : ''}
             ${classData.needsConfirmation ? '<button type="button" class="schedule-action is-warning" data-schedule-action="confirmation">К подтверждению</button>' : ''}
         </div>
@@ -1417,10 +1417,7 @@ function renderScheduleDetails(classData) {
             if (action === 'open') return openSelectedScheduleLesson(classData);
             if (action === 'conduct') return conductSelectedScheduleLesson(classData);
             if (action === 'cancel') return cancelSelectedScheduleLesson(classData);
-            if (action === 'add-exam' && typeof openSectorExamModal === 'function') {
-                closeScheduleDetails();
-                return openSectorExamModal({ lesson: classData });
-            }
+
         });
     });
     popover.classList.add('is-open');

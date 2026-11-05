@@ -988,6 +988,8 @@ router.post('/', authenticate, requireAdmin, async (req, res) => {
             deliveryFormat: requestedDeliveryFormat, meetingUrl: requestedMeetingUrl
         } = req.body;
 
+        if (requestedClassType === 'exam') return res.status(409).json({success:false,code:'EXAM_SESSION_REQUIRED',error:'Создайте и назначьте экзамен в приложении Maestro'});
+
         if (!date || !startTime || !endTime) {
             return res.status(400).json({ success: false, error: 'Дата, время начала и окончания обязательны' });
         }
@@ -2064,6 +2066,13 @@ router.patch('/:id', authenticate, requireAdmin, async (req, res) => {
             include: { attendees: { select: { studentId: true } } },
         });
         if (!current) return res.status(404).json({ success: false, error: 'Занятие не найдено' });
+        if ((data.classType === 'exam' && current.classType !== 'exam')
+            || (current.classType === 'exam' && ((data.classType !== undefined && data.classType !== 'exam')
+                || (data.price !== undefined && Number(data.price) !== 0) || data.isPractice === true
+                || Boolean(data.individualStudentId) || data.deliveryFormat === 'online' || data.roomId === null))) {
+            return res.status(409).json({success:false,code:'EXAM_SESSION_REQUIRED',error:'Экзамен остаётся бесплатным очным уроком с составом из приложения Maestro'});
+        }
+
         if (data.date) {
             const nextDate = new Date(data.date);
             const today = new Date();

@@ -2465,8 +2465,8 @@
                 <input type="hidden" id="classId">
 
                 <div id="classSectorExamOffer" class="sector-exam-offer" hidden>
-                    <span id="classSectorExamOfferText">Экзамены ждут назначения</span>
-                    <button type="button" class="admin-btn btn-secondary" onclick="openSectorExamModal()">🎓 Назначить экзамен</button>
+                    <span>Экзамен создаётся и назначается в приложении Maestro</span>
+                    <a class="admin-btn btn-secondary" href="https://app.maestro.com.kz/admin/sector-exams" target="_blank" rel="noopener">Открыть экзамены</a>
                 </div>
 
                 <div class="form-group">
@@ -2574,48 +2574,6 @@
     </div>
 
     <!-- Дневное расписание для просмотра и печати -->
-    <!-- План 1.11: назначение экзамена сектора в свободное время -->
-    <div class="modal" id="sectorExamModal">
-        <div class="modal-overlay" onclick="closeSectorExamModal()"></div>
-        <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="sectorExamModalTitle">
-            <button class="modal-close" type="button" onclick="closeSectorExamModal()" aria-label="Закрыть">×</button>
-            <h2 class="modal-title" id="sectorExamModalTitle">НАЗНАЧИТЬ ЭКЗАМЕН</h2>
-            <p class="sector-exam-modal-note">Бесплатный дополнительный урок. Список проверки подготовлен в платформе обучения; ученик, родитель и преподаватель получат уведомление.</p>
-            <form class="admin-form" id="sectorExamForm" onsubmit="submitSectorExamSchedule(event)">
-                <fieldset class="form-group sector-exam-choice">
-                    <legend>ЭКЗАМЕНЫ</legend>
-                    <p class="sector-exam-choice__hint">Можно отметить нескольких учеников: экзамен пройдёт одним уроком, преподаватель получит оплату как за один урок.</p>
-                    <div id="sectorExamChoices" class="sector-exam-choice__list"></div>
-                </fieldset>
-                <p id="sectorExamTarget" class="sector-exam-target" hidden></p>
-                <div id="sectorExamSlotFields">
-                    <div class="form-group">
-                        <label for="sectorExamTeacher">ПРЕПОДАВАТЕЛЬ</label>
-                        <select class="admin-input" id="sectorExamTeacher"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="sectorExamRoom">КАБИНЕТ</label>
-                        <select class="admin-input" id="sectorExamRoom"></select>
-                    </div>
-                    <div class="form-group">
-                        <label for="sectorExamDate">ДАТА</label>
-                        <input type="date" class="admin-input" id="sectorExamDate">
-                    </div>
-                    <div class="form-group sector-exam-times">
-                        <label>ВРЕМЯ
-                            <span class="sector-exam-time-row">
-                                <input type="time" class="admin-input" id="sectorExamStart" aria-label="Начало">
-                                <input type="time" class="admin-input" id="sectorExamEnd" aria-label="Окончание">
-                            </span>
-                        </label>
-                    </div>
-                </div>
-                <p id="sectorExamError" class="sector-exam-error" role="alert" hidden></p>
-                <button type="submit" class="modal-submit" id="sectorExamSubmit">НАЗНАЧИТЬ ЭКЗАМЕН</button>
-            </form>
-        </div>
-    </div>
-
     <div class="modal daily-schedule-modal" id="dailyScheduleModal" aria-hidden="true">
         <div class="modal-overlay" id="dailyScheduleModalOverlay"></div>
         <div class="modal-content daily-schedule-modal__content" role="dialog" aria-modal="true"

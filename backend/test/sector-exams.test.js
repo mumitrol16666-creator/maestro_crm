@@ -85,3 +85,8 @@ test('the queue shows the group and suggests the group teacher for a group exam'
     assert.equal(result.exams[0].suggestedTeacherId, 't-group');
     assert.equal(result.exams[0].title, 'Экзамен сектора группы 2 · Гитара · Квартет');
 });
+
+
+test('a prepared exam session keeps its title in the CRM queue', () => {
+    assert.equal(sectorExamTitle({sessionId:'session-1',sessionTitle:'Первый сектор ноябрь',directionTitle:'Гитара'}),'Первый сектор ноябрь · Гитара');
+});

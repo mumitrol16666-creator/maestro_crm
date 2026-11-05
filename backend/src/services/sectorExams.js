@@ -35,6 +35,7 @@ function isSectorExamClass(classRecord) {
 }
 
 function sectorExamTitle(exam) {
+    if (exam?.sessionTitle) return `${exam.sessionTitle}${exam.directionTitle ? ` · ${exam.directionTitle}` : ""}`;
     // Plan 1.13: a group sector exam is one exam per member; the title names the group.
     const group = exam?.crmGroupId ? 'группы ' : '';
     const sector = exam?.sectorSequence ? `сектора ${group}${exam.sectorSequence}` : `сектора ${group}`.trim();

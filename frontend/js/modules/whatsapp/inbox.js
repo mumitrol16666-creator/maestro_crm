@@ -49,15 +49,6 @@ function whatsappInboxShell() {
     root.dataset.ready = '1';
     root.innerHTML = `
         <div class="wa-inbox-page">
-            <header class="wa-inbox-hero">
-                <div>
-                    <p class="wa-inbox-eyebrow">Рабочая переписка</p>
-                    <h2>WhatsApp школы</h2>
-                    <p>Входящие, привязка к CRM и ручная работа без автоответов AI.</p>
-                </div>
-                <div class="wa-inbox-session" id="waInboxSession"></div>
-            </header>
-            <div class="wa-inbox-stats" id="waInboxStats"></div>
             <div class="wa-inbox-toolbar">
                 <div class="wa-inbox-filters" id="waInboxFilters">
                     <button type="button" data-wa-action="filter" data-filter="needs_reply">Ждут ответа</button>
@@ -65,11 +56,11 @@ function whatsappInboxShell() {
                     <button type="button" data-wa-action="filter" data-filter="taken">Забраны</button>
                     <button type="button" data-wa-action="filter" data-filter="unlinked">Без привязки</button>
                 </div>
+                <p class="wa-inbox-queue" id="waInboxQueue" hidden></p>
                 <label class="wa-inbox-search">
                     <span>Поиск</span>
                     <input type="search" id="waInboxSearch" placeholder="Имя или телефон">
                 </label>
-                <button type="button" class="wa-inbox-refresh" data-wa-action="refresh">Обновить</button>
             </div>
             <div class="wa-inbox-workspace">
                 <aside class="wa-conversation-list" id="waConversationList"></aside>
@@ -81,43 +72,33 @@ function whatsappInboxShell() {
     return root;
 }
 
+// Состояние бота показывает шапка раздела (reminders.js); здесь только счётчики фильтров и вкладки.
 function whatsappInboxRenderStatus() {
-    const status = whatsappInboxState.status;
-    const sessionRoot = document.getElementById('waInboxSession');
-    const statsRoot = document.getElementById('waInboxStats');
-    const badge = document.getElementById('whatsappInboxBadge');
-    if (!status || !sessionRoot || !statsRoot) return;
-    const online = status.online;
-    const workerAlive = status.workerAlive;
-    const session = status.session;
-    const needsQr = Boolean(workerAlive && session?.status === 'qr_required');
-    const statusTitle = online
-        ? `WhatsApp подключён · ${session?.mode === 'manual' ? 'ручная отправка' : 'наблюдение'}`
-        : needsQr
-            ? 'Требуется подключить WhatsApp'
-            : workerAlive
-                ? 'Worker запущен · подключение проверяется'
-                : 'Worker не в сети';
-    sessionRoot.innerHTML = `
-        <span class="wa-status-dot ${online ? 'online' : needsQr ? 'attention' : 'offline'}"></span>
-        <span class="wa-inbox-session-copy"><strong>${whatsappInboxEscape(statusTitle)}</strong>
-        <small>${session ? `Последний сигнал: ${whatsappInboxEscape(whatsappInboxDate(session.lastHeartbeatAt, true))}` : 'Сессия ещё не запускалась'}</small></span>
-        ${needsQr ? '<button type="button" class="wa-qr-open" data-wa-action="show-qr">Показать QR-код</button>' : ''}`;
-    const totals = status.totals || {};
-    statsRoot.innerHTML = [
-        ['Диалогов', totals.conversations || 0, 'all'],
-        ['Ждут ответа', totals.needsReply || 0, 'needs_reply'],
-        ['В ручной работе', totals.taken || 0, 'taken'],
-        ['В очереди', totals.queued || 0, 'queue'],
-    ].map(([label, value, filter]) => `
-        <button type="button" data-wa-action="filter" data-filter="${filter}" ${filter === 'queue' ? 'disabled' : ''}>
-            <span>${whatsappInboxEscape(label)}</span><strong>${value}</strong>
-        </button>`).join('');
-    const needsReply = Number(totals.needsReply || 0);
-    if (badge) {
-        badge.textContent = needsReply > 99 ? '99+' : String(needsReply);
-        badge.style.display = needsReply ? 'inline-flex' : 'none';
+    const totals = whatsappInboxState.status?.totals || {};
+    const labels = { needs_reply: ['Ждут ответа', totals.needsReply], all: ['Все', totals.conversations], taken: ['Забраны', totals.taken] };
+    document.querySelectorAll('#waInboxFilters [data-filter]').forEach(button => {
+        const entry = labels[button.dataset.filter];
+        if (!entry) return;
+        button.textContent = `${entry[0]} · ${Number(entry[1] || 0)}`;
+    });
+    const queue = document.getElementById('waInboxQueue');
+    if (queue) {
+        const queued = Number(totals.queued || 0);
+        queue.hidden = !queued;
+        queue.textContent = queued ? `Ответов ждут отправки: ${queued}` : '';
     }
+    const needsReply = Number(totals.needsReply || 0);
+    const chip = document.getElementById('waHubInboxCount');
+    if (chip) {
+        chip.textContent = needsReply > 99 ? '99+' : String(needsReply);
+        chip.classList.toggle('is-hot', needsReply > 0);
+    }
+}
+
+async function loadWhatsappInboxStatus() {
+    const status = await whatsappInboxFetch('/status');
+    whatsappInboxState.status = status.status;
+    return status.status;
 }
 
 function whatsappInboxCloseQr() {
@@ -127,8 +108,8 @@ function whatsappInboxCloseQr() {
 }
 
 function whatsappInboxEnsureQrModal() {
-    const root = document.getElementById('whatsappInboxRoot');
-    if (!root) return null;
+    // В body, а не в раздел: QR открывают и из шапки, когда вкладка «Переписка» скрыта.
+    const root = document.body;
     let modal = document.getElementById('waQrModal');
     if (modal) return modal;
     root.insertAdjacentHTML('beforeend', `
@@ -282,11 +263,10 @@ async function whatsappInboxLoadDetail(id) {
 }
 
 async function whatsappInboxRefresh({ keepDetail = true } = {}) {
-    const [status] = await Promise.all([
-        whatsappInboxFetch('/status'),
+    await Promise.all([
+        loadWhatsappInboxStatus(),
         whatsappInboxLoadList(),
     ]);
-    whatsappInboxState.status = status.status;
     whatsappInboxRenderStatus();
     if (keepDetail && whatsappInboxState.selectedId) {
         await whatsappInboxLoadDetail(whatsappInboxState.selectedId).catch(() => {
@@ -326,7 +306,7 @@ function bindWhatsappInboxEvents() {
     whatsappInboxState.bound = true;
     document.addEventListener('click', async event => {
         const control = event.target.closest?.('[data-wa-action]');
-        if (!control || !control.closest('#whatsappInboxRoot')) return;
+        if (!control || !control.closest('#whatsappInboxRoot, #waQrModal')) return;
         const action = control.dataset.waAction;
         try {
             if (action === 'refresh') await whatsappInboxRefresh();
@@ -410,4 +390,11 @@ async function renderWhatsappInbox() {
 }
 
 window.renderWhatsappInbox = renderWhatsappInbox;
+window.loadWhatsappInboxStatus = loadWhatsappInboxStatus;
+window.whatsappInboxNeedsReply = () => whatsappInboxState.status?.totals?.needsReply || 0;
+// Своё имя: window.whatsappInboxOpenQr и есть функция whatsappInboxOpenQr, переназначение зациклило бы вызов.
+window.openWhatsappQrFromHub = () => {
+    bindWhatsappInboxEvents();
+    return whatsappInboxOpenQr().catch(error => toast.error(error.message));
+};
 window.refreshWhatsappInbox = () => whatsappInboxRefresh();

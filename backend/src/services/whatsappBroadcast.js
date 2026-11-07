@@ -3,6 +3,9 @@
 // отправки прошло intervalSec, поэтому даже два воркера не отправят чаще.
 // Одна карточка уходит не больше одного раза: перед выдачей CRM ещё раз
 // проверяет ручную отметку «Отправлено» и другие рассылки этой карточки.
+// «Своя рассылка» — тот же механизм для списка номеров, который вставил администратор.
+
+const crypto = require('crypto');
 
 const BROADCAST_KINDS = {
     today: 'Сегодня урок',
@@ -11,6 +14,7 @@ const BROADCAST_KINDS = {
     oneLesson: 'Низкий баланс',
     tasks: 'Запланированные контакты',
     exam: 'Экзамены',
+    custom: 'Своя рассылка',
 };
 // Те же подписи, что пишет ручная галочка «Отправлено» (routes/admin.js): одна лента «Активности».
 const REMINDER_LOG_LABELS = {
@@ -20,6 +24,7 @@ const REMINDER_LOG_LABELS = {
     oneLesson: 'Оплата',
     tasks: 'Запланированный контакт',
     exam: 'Экзамен сектора',
+    custom: 'Своя рассылка',
 };
 const RESULT_STATUSES = new Set(['sent', 'invalid', 'failed', 'uncertain']);
 // Карточка с таким элементом в другую рассылку не попадает: она в очереди или, возможно, уже ушла.
@@ -52,6 +57,13 @@ function normalizeBroadcastPhone(raw) {
 // Платёжные шаблоны содержат «Сумма: ___ ₸»: с пропуском такое сообщение отправлять нельзя.
 function hasUnfilledPlaceholder(content) {
     return /_{3,}/.test(content);
+}
+
+// У своей рассылки нет карточек: номер и текст сами задают «карточку» на день.
+// Тот же текст на тот же номер в тот же день второй раз не уйдёт, на другой день — уйдёт.
+function customReminderId(phone, content, now) {
+    const digest = crypto.createHash('sha256').update(`${phone}\n${content}`).digest('hex').slice(0, 20);
+    return `custom:${now.toISOString().slice(0, 10)}:${digest}`;
 }
 
 function lock(tx) {
@@ -96,9 +108,11 @@ async function createBroadcast(db, { kind, items, userId, intervalSec = DEFAULT_
     const accepted = [];
     const seenReminders = new Set();
     for (const raw of items) {
-        const reminderId = String(raw?.reminderId || '').trim().slice(0, 200);
         const content = String(raw?.content || '').trim();
         const phone = normalizeBroadcastPhone(raw?.phone);
+        const reminderId = kind === 'custom'
+            ? (phone && content ? customReminderId(phone, content, now) : `custom:${String(raw?.phone || '').slice(0, 40)}`)
+            : String(raw?.reminderId || '').trim().slice(0, 200);
         const recipientName = String(raw?.recipientName || '').trim().slice(0, 200) || null;
         const expiresAt = expiryFor(raw?.expiresAt, now);
         const skip = reason => skipped.push({ reminderId, recipientName, reason });
@@ -109,7 +123,8 @@ async function createBroadcast(db, { kind, items, userId, intervalSec = DEFAULT_
         if (content.length > MAX_CONTENT) { skip('слишком длинный текст'); continue; }
         if (hasUnfilledPlaceholder(content)) { skip('в тексте пропуск «___», например не указана сумма'); continue; }
         if (expiresAt <= now) { skip('урок уже начался'); continue; }
-        accepted.push({ reminderId, studentId: String(raw?.studentId || '').trim() || null, recipientName, phone, content, expiresAt });
+        const studentId = kind === 'custom' ? null : String(raw?.studentId || '').trim() || null;
+        accepted.push({ reminderId, studentId, recipientName, phone, content, expiresAt });
     }
 
     return db.$transaction(async tx => {
@@ -123,7 +138,7 @@ async function createBroadcast(db, { kind, items, userId, intervalSec = DEFAULT_
         const queue = [];
         const firstByMessage = new Map();
         for (const item of accepted) {
-            if (sent.has(item.reminderId)) { skipped.push({ reminderId: item.reminderId, recipientName: item.recipientName, reason: 'уже отправлено' }); continue; }
+            if (sent.has(item.reminderId)) { skipped.push({ reminderId: item.reminderId, recipientName: item.recipientName, reason: kind === 'custom' ? 'этот текст на этот номер сегодня уже ушёл' : 'уже отправлено' }); continue; }
             if (busy.has(item.reminderId)) { skipped.push({ reminderId: item.reminderId, recipientName: item.recipientName, reason: 'уже в рассылке или, возможно, ушло рассылкой' }); continue; }
             // Тот же текст на тот же номер (общий телефон родителя): уходит один раз,
             // отметку «Отправлено» получают обе карточки.
@@ -372,6 +387,7 @@ async function broadcastOverview(db, { now = new Date() } = {}) {
     return {
         worker: {
             online,
+            alive: fresh,
             status: session?.status || 'stopped',
             broadcastEnabled: session?.metadata?.broadcast === true,
             lastHeartbeatAt: session?.lastHeartbeatAt || null,

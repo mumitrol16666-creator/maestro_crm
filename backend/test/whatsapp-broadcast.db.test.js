@@ -170,6 +170,34 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal(row.status, 'done');
     });
 
+    test('own list: ids come from phone and text, the same text to the same phone goes once a day', async () => {
+        const morning = new Date('2026-11-07T04:00:00Z');
+        const list = [
+            { recipientName: 'Айгерим', phone: '8 705 000 00 01', content: 'Урок сегодня перенесён на 19:00' },
+            { recipientName: 'Данияр', phone: '+7 705 000 00 02', content: 'Урок сегодня перенесён на 19:00' },
+            { recipientName: 'Повтор', phone: '87050000001', content: 'Урок сегодня перенесён на 19:00' },
+        ];
+        const { broadcast } = await createBroadcast(prisma, { kind: 'custom', userId: admin.id, items: list, now: morning });
+        assert.equal(broadcast.label, 'Своя рассылка');
+        assert.equal(broadcast.items.length, 2, 'the same phone with the same text is queued once');
+        assert.ok(broadcast.items.every(row => /^custom:2026-11-07:[0-9a-f]{20}$/.test(row.reminderId) && row.studentId === null));
+
+        const first = await claim(0);
+        await reportBroadcastItemResult(prisma, { itemId: first.item.id, workerId: WORKER, status: 'sent' });
+        const [mark] = await prisma.activityLog.findMany({ where: { entityType: 'WhatsAppReminder', entityId: { startsWith: 'custom:' } } });
+        assert.equal(mark.details, 'Айгерим — Рассылка — Своя рассылка');
+        await cancelBroadcast(prisma, broadcast.id);
+
+        const again = await createBroadcast(prisma, { kind: 'custom', userId: admin.id, items: list.slice(0, 2), now: morning });
+        assert.deepEqual(again.broadcast.items.map(row => row.phone), ['77050000002'], 'Айгерим already got this text today');
+        assert.equal(again.skipped[0].reason, 'этот текст на этот номер сегодня уже ушёл');
+        await cancelBroadcast(prisma, again.broadcast.id);
+
+        const tomorrow = await createBroadcast(prisma, { kind: 'custom', userId: admin.id, items: list.slice(0, 1), now: new Date('2026-11-08T04:00:00Z') });
+        assert.equal(tomorrow.broadcast.items.length, 1, 'the next day the same text may go again');
+        await prisma.activityLog.deleteMany({ where: { entityType: 'WhatsAppReminder', entityId: { startsWith: 'custom:' } } });
+    });
+
     test('one message at a time, then a three-minute pause; sent marks the reminder as sent', async () => {
         await createBroadcast(prisma, { kind: 'today', userId: admin.id, items: [item(1), item(2), item(3)] });
 

@@ -37,7 +37,12 @@ function initNavigation() {
         });
     });
 
-    const requestedSection = window.location.hash.replace('#', '') || 'schedule';
+    let requestedSection = window.location.hash.replace('#', '') || 'schedule';
+    // «Переписка» WhatsApp теперь вкладка раздела WhatsApp: старые ссылки #whatsapp-inbox ведут туда.
+    if (requestedSection === 'whatsapp-inbox') {
+        window.whatsappReminderOpenInbox?.();
+        requestedSection = 'whatsapp-reminders';
+    }
     if (!activateSection(requestedSection, false)) activateSection('schedule', false);
     window.showSection = (sectionId) => activateSection(sectionId);
 

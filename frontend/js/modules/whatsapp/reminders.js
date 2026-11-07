@@ -5,6 +5,8 @@ let whatsappBroadcastData = null;
 let whatsappBroadcastTimer = null;
 let whatsappBroadcastStarting = false;
 const WHATSAPP_BROADCAST_INTERVAL_MIN = 3;
+const WHATSAPP_CUSTOM_DRAFT_KEY = 'maestro-whatsapp-custom-draft';
+let whatsappCustomDraft = whatsappCustomLoadDraft();
 const WHATSAPP_PAYMENT_LINK = 'https://pay.kaspi.kz/pay/ku3aldre';
 
 function whatsappReminderEscape(value) {
@@ -97,6 +99,10 @@ function bindWhatsappReminderEvents() {
             renderWhatsappReminders(true);
             return;
         }
+        if (whatsappAction === 'show-qr') {
+            window.openWhatsappQrFromHub?.();
+            return;
+        }
         if (whatsappAction === 'open') {
             openWhatsappReminder(kind, itemId, control);
             return;
@@ -107,6 +113,10 @@ function bindWhatsappReminderEvents() {
         }
         if (whatsappAction === 'broadcast') {
             startWhatsappBroadcast(kind);
+            return;
+        }
+        if (whatsappAction === 'custom-broadcast') {
+            startWhatsappCustomBroadcast();
             return;
         }
         if (whatsappAction === 'broadcast-cancel') {
@@ -133,6 +143,12 @@ function bindWhatsappReminderEvents() {
     document.addEventListener('input', (event) => {
         const field = event.target;
         if (!(field instanceof HTMLTextAreaElement)) return;
+        if (['custom-message', 'custom-contacts'].includes(field.dataset.whatsappAction) && field.closest('#whatsappRemindersRoot')) {
+            whatsappCustomDraft[field.dataset.whatsappAction === 'custom-message' ? 'message' : 'contacts'] = field.value;
+            whatsappCustomSaveDraft();
+            updateWhatsappCustomSummary();
+            return;
+        }
         if (field.dataset.whatsappAction !== 'message' || !field.closest('#whatsappRemindersRoot')) return;
         const item = whatsappReminderItem(field.dataset.kind, field.dataset.itemId);
         if (item) item.message = field.value;
@@ -178,8 +194,10 @@ async function copyWhatsappReminder(kind, itemId) {
 }
 
 function setWhatsappReminderFilter(kind) {
+    const wasInbox = whatsappReminderFilter === 'inbox';
     whatsappReminderFilter = kind;
     renderWhatsappReminderContent();
+    if (kind === 'inbox' && !wasInbox && typeof renderWhatsappInbox === 'function') renderWhatsappInbox();
 }
 
 function whatsappReminderMeta(kind, item) {
@@ -290,41 +308,80 @@ function whatsappReminderCard(kind, item) {
     `;
 }
 
+
+// Одна строка состояния бота WhatsApp для всего раздела: выключен, сломан, вышел из аккаунта или готов.
+function whatsappWorkerStatus() {
+    const worker = whatsappBroadcastData?.worker;
+    if (!worker) return null;
+    const lastSeen = worker.lastHeartbeatAt ? ` (последний раз в ${whatsappBroadcastTime(worker.lastHeartbeatAt)})` : '';
+    if (worker.online && !worker.broadcastEnabled) {
+        return { tone: 'warn', text: 'Бот WhatsApp подключён, но рассылка в нём выключена: сообщения встанут в очередь и будут ждать' };
+    }
+    if (worker.online) return { tone: 'ok', text: 'Бот WhatsApp подключён: входящие приходят, рассылка пойдёт сразу' };
+    if (worker.alive && worker.status === 'qr_required') {
+        return { tone: 'warn', qr: true, text: 'Бот WhatsApp вышел из аккаунта: отсканируйте QR. До этого входящих и рассылки нет' };
+    }
+    if (worker.alive && worker.status === 'degraded') {
+        return { tone: 'bad', text: 'Бот WhatsApp запущен, но WhatsApp в нём не открывается: входящих и рассылки нет, пока его не перезапустить' };
+    }
+    return { tone: 'bad', text: `Бот WhatsApp выключен${lastSeen}: входящих и рассылки нет, пока его не запустить на компьютере школы` };
+}
+
+function whatsappWorkerStatusHtml() {
+    const status = whatsappWorkerStatus();
+    if (!status) return '';
+    return `<p class="wa-hub-status is-${status.tone}"><i aria-hidden="true"></i><span>${whatsappReminderEscape(status.text)}</span>${status.qr ? '<button type="button" data-whatsapp-action="show-qr">Показать QR</button>' : ''}</p>`;
+}
+
+function whatsappReminderPanels() {
+    const isInbox = whatsappReminderFilter === 'inbox';
+    const inboxRoot = document.getElementById('whatsappInboxRoot');
+    if (inboxRoot) inboxRoot.hidden = !isInbox;
+}
+
 function renderWhatsappReminderContent() {
     const root = document.getElementById('whatsappRemindersRoot');
     if (!root || !whatsappReminderData) return;
     const labels = {
+        inbox: 'Переписка',
         today: 'Сегодня урок',
         tomorrow: 'Завтра урок',
         homework: 'После урока',
         oneLesson: 'Низкий баланс',
-        tasks: 'Запланированные контакты',
+        tasks: 'Контакты по плану',
         exam: 'Экзамены',
+        custom: 'Своя рассылка',
     };
-    const items = whatsappReminderData[whatsappReminderFilter] || [];
+    const isInbox = whatsappReminderFilter === 'inbox';
+    const items = isInbox ? [] : (whatsappReminderData[whatsappReminderFilter] || []);
+    const isCustom = whatsappReminderFilter === 'custom';
+    const inboxCount = Number(window.whatsappInboxNeedsReply?.() || 0);
+    const count = key => key === 'inbox'
+        ? `<span class="wa-hub-count${inboxCount ? ' is-hot' : ''}" id="waHubInboxCount">${inboxCount > 99 ? '99+' : inboxCount}</span>`
+        : key === 'custom'
+            ? '<span class="wa-hub-count" aria-hidden="true">✎</span>'
+            : `<span class="wa-hub-count">${whatsappReminderData.counts?.[key] || 0}</span>`;
     root.innerHTML = `
-        <div class="ops-hero whatsapp-reminders-hero">
-            <div>
-                <p class="ops-eyebrow">Вручную по одному или рассылкой</p>
-                <h2>WhatsApp-напоминания</h2>
-                <p>После подтверждения урока здесь появляется аккуратный шаблон из темы, домашнего задания и итога. Его можно поправить перед отправкой. «Разослать всем» отправляет тексты этой вкладки по одному раз в 3 минуты через WhatsApp на компьютере школы.</p>
-            </div>
-            <button class="ops-refresh" data-whatsapp-action="refresh">Обновить</button>
-        </div>
-        <div class="whatsapp-reminder-tabs">
+        <header class="wa-hub-head">
+            ${whatsappWorkerStatusHtml()}
+            <button class="ops-refresh wa-hub-refresh" data-whatsapp-action="refresh">Обновить</button>
+        </header>
+        <nav class="wa-hub-tabs" aria-label="Разделы WhatsApp">
             ${Object.entries(labels).map(([key, label]) => `
-                <button class="${whatsappReminderFilter === key ? 'active' : ''}" data-whatsapp-action="filter" data-kind="${whatsappReminderEscape(key)}">
-                    <span>${whatsappReminderData.counts?.[key] || 0}</span>${label}
+                <button type="button" class="${whatsappReminderFilter === key ? 'active' : ''}${key === 'inbox' ? ' is-inbox' : ''}" data-whatsapp-action="filter" data-kind="${whatsappReminderEscape(key)}" ${whatsappReminderFilter === key ? 'aria-current="page"' : ''}>
+                    ${label}${count(key)}
                 </button>
             `).join('')}
-        </div>
-        ${whatsappBroadcastPanel(whatsappReminderFilter, items)}
-        <div class="whatsapp-reminder-list">
+        </nav>
+        ${isInbox ? '' : isCustom ? whatsappCustomComposer() : whatsappBroadcastPanel(whatsappReminderFilter, items)}
+        ${isInbox || isCustom ? '' : `<div class="whatsapp-reminder-list">
             ${items.length
                 ? items.map(item => whatsappReminderCard(whatsappReminderFilter, item)).join('')
                 : '<div class="ops-empty">В этой очереди сейчас никого нет</div>'}
-        </div>
+        </div>`}
     `;
+    whatsappReminderPanels();
+    if (isCustom) updateWhatsappCustomSummary();
 }
 
 // Те же правила, что у сервера (services/whatsappBroadcast.js): иначе число на кнопке не совпадёт с очередью.
@@ -372,22 +429,13 @@ const WHATSAPP_BROADCAST_PROBLEMS = {
     expired: 'время прошло, не отправляли',
 };
 
-function whatsappBroadcastPanel(kind, items) {
+function whatsappBroadcastPanel(kind, items, { startButton = true } = {}) {
     const overview = whatsappBroadcastData;
     const running = overview?.broadcasts?.find(row => row.status === 'running') || null;
     const recent = overview?.broadcasts?.find(row => row.status !== 'running' && row.kind === kind) || null;
-    const worker = overview?.worker;
     const ready = items.filter(item => whatsappBroadcastReady(kind, item)).length;
     const locked = items.filter(item => whatsappBroadcastLock(item)).length;
     const notReady = items.filter(item => !whatsappBroadcastLock(item) && !whatsappBroadcastFillable(kind, item)).length;
-    const workerLine = !overview
-        ? ''
-        : worker?.online && !worker.broadcastEnabled
-            ? '<span class="whatsapp-broadcast-worker">WhatsApp подключён, но рассылка в нём выключена. Сообщения будут ждать</span>'
-        : worker?.online
-            ? '<span class="whatsapp-broadcast-worker is-online">WhatsApp на компьютере школы на связи</span>'
-            : `<span class="whatsapp-broadcast-worker">WhatsApp на компьютере школы не на связи${worker?.lastHeartbeatAt ? ` · был в ${whatsappReminderEscape(whatsappBroadcastTime(worker.lastHeartbeatAt))}` : ''}. Рассылка начнётся, когда он включится</span>`;
-
     const block = (row, isRunning) => {
         const total = row.items.length;
         const counts = row.counts || {};
@@ -411,10 +459,9 @@ function whatsappBroadcastPanel(kind, items) {
     return `
         <section class="whatsapp-broadcast" aria-label="Рассылка">
             <div class="whatsapp-broadcast-head">
-                <button type="button" class="whatsapp-broadcast-start" data-whatsapp-action="broadcast" data-kind="${whatsappReminderEscape(kind)}" ${ready && !busy ? '' : 'disabled'}>
+                ${startButton ? `<button type="button" class="whatsapp-broadcast-start" data-whatsapp-action="broadcast" data-kind="${whatsappReminderEscape(kind)}" ${ready && !busy ? '' : 'disabled'}>
                     Разослать всем (${ready}) · раз в ${WHATSAPP_BROADCAST_INTERVAL_MIN} мин
-                </button>
-                ${workerLine}
+                </button>` : ''}
             </div>
             ${running && running.kind !== kind ? `<p class="whatsapp-broadcast-note">Сейчас идёт рассылка «${whatsappReminderEscape(running.label)}». Новую можно запустить после неё.</p>` : ''}
             ${notReady ? `<p class="whatsapp-broadcast-note">Не войдут в рассылку: ${notReady}. У них нет телефона или в тексте пропуск «___» (например, сумма), их можно отправить вручную.</p>` : ''}
@@ -477,7 +524,8 @@ function scheduleWhatsappBroadcastPoll() {
     const running = whatsappBroadcastData?.broadcasts?.some(row => row.status === 'running');
     whatsappBroadcastTimer = setTimeout(async () => {
         await loadWhatsappBroadcasts();
-        if (!document.activeElement?.matches?.('textarea[data-whatsapp-action="message"]')) {
+        // Не перерисовывать, пока человек печатает в любом поле вкладки: иначе собьётся курсор.
+        if (!document.activeElement?.matches?.('#whatsappRemindersRoot textarea, #whatsappRemindersRoot input')) {
             renderWhatsappReminderContent();
         }
     }, running ? 10000 : 30000);
@@ -554,6 +602,147 @@ async function cancelWhatsappBroadcast(broadcastId) {
     }
 }
 
+function whatsappCustomLoadDraft() {
+    try {
+        const saved = JSON.parse(localStorage.getItem(WHATSAPP_CUSTOM_DRAFT_KEY) || '{}');
+        return { message: String(saved.message || ''), contacts: String(saved.contacts || '') };
+    } catch {
+        return { message: '', contacts: '' };
+    }
+}
+
+function whatsappCustomSaveDraft() {
+    try {
+        localStorage.setItem(WHATSAPP_CUSTOM_DRAFT_KEY, JSON.stringify(whatsappCustomDraft));
+    } catch {
+        // Черновик — удобство: без хранилища вкладка работает, просто не помнит текст.
+    }
+}
+
+// Одна строка — один контакт: «Имя; телефон», «Имя, телефон», «Имя телефон» или только телефон.
+function whatsappCustomContacts(text) {
+    const contacts = [];
+    const bad = [];
+    const seen = new Set();
+    for (const rawLine of String(text || '').split(/\r?\n/)) {
+        const line = rawLine.trim();
+        if (!line) continue;
+        const match = line.match(/\+?\d[\d\s()\-]{8,}\d/);
+        const phone = match ? whatsappBroadcastPhone(match[0]) : '';
+        if (!phone) {
+            bad.push(line);
+            continue;
+        }
+        if (seen.has(phone)) continue;
+        seen.add(phone);
+        const name = (line.slice(0, match.index) + line.slice(match.index + match[0].length)).replace(/^[\s;,\-—]+|[\s;,\-—]+$/g, '');
+        contacts.push({ name, phone });
+    }
+    return { contacts, bad };
+}
+
+// {имя} — первое слово имени. Без имени «Здравствуйте, {имя}!» становится «Здравствуйте!».
+function whatsappCustomText(message, name) {
+    const first = String(name || '').trim().split(/\s+/)[0] || '';
+    return first
+        ? String(message).replace(/\{[иИ]мя\}/g, first).trim()
+        : String(message).replace(/,?[ \t]*\{[иИ]мя\}/g, '').trim();
+}
+
+function whatsappCustomComposer() {
+    return `
+        <section class="whatsapp-custom" aria-label="Своя рассылка">
+            <label class="whatsapp-custom-field">
+                <span>Сообщение</span>
+                <textarea class="admin-input" rows="4" data-whatsapp-action="custom-message" placeholder="Здравствуйте, {имя}! Урок сегодня переносится на 19:00.">${whatsappReminderEscape(whatsappCustomDraft.message)}</textarea>
+                <small>{имя} заменится на первое слово из строки контакта. Если имени нет, получится «Здравствуйте!».</small>
+            </label>
+            <label class="whatsapp-custom-field">
+                <span>Номера, по одному на строку</span>
+                <textarea class="admin-input" rows="8" data-whatsapp-action="custom-contacts" placeholder="Айгерим; +7 701 123 45 67&#10;Данияр, 87021234567&#10;+77051234567">${whatsappReminderEscape(whatsappCustomDraft.contacts)}</textarea>
+                <small data-whatsapp-custom="parsed"></small>
+            </label>
+            <div class="whatsapp-custom-preview" data-whatsapp-custom="preview" hidden></div>
+            <div class="whatsapp-broadcast-head">
+                <button type="button" class="whatsapp-broadcast-start" data-whatsapp-action="custom-broadcast" data-whatsapp-custom="start" disabled>Разослать</button>
+            </div>
+        </section>
+        ${whatsappBroadcastPanel('custom', [], { startButton: false })}
+    `;
+}
+
+// Обновляет счётчик, пример и кнопку без перерисовки вкладки, чтобы не сбивать курсор в поле.
+function updateWhatsappCustomSummary() {
+    const root = document.getElementById('whatsappRemindersRoot');
+    if (!root) return;
+    const { contacts, bad } = whatsappCustomContacts(whatsappCustomDraft.contacts);
+    const message = whatsappCustomDraft.message.trim();
+    const running = whatsappBroadcastData?.broadcasts?.some(row => row.status === 'running');
+    const parsed = root.querySelector('[data-whatsapp-custom="parsed"]');
+    const preview = root.querySelector('[data-whatsapp-custom="preview"]');
+    const start = root.querySelector('[data-whatsapp-custom="start"]');
+    if (parsed) {
+        parsed.textContent = `Номеров: ${contacts.length}.`
+            + (bad.length ? ` Не понял строки (${bad.length}): ${bad.slice(0, 3).join(' · ')}${bad.length > 3 ? '…' : ''}` : ' Повторы номеров убираются.');
+    }
+    if (preview) {
+        preview.hidden = !(message && contacts.length);
+        preview.textContent = message && contacts.length ? `Так увидит первый: ${whatsappCustomText(message, contacts[0].name)}` : '';
+    }
+    if (start) {
+        start.textContent = `Разослать (${contacts.length}) · раз в ${WHATSAPP_BROADCAST_INTERVAL_MIN} мин`;
+        start.disabled = !message || !contacts.length || running || whatsappBroadcastStarting;
+    }
+}
+
+async function startWhatsappCustomBroadcast() {
+    if (whatsappBroadcastStarting) return;
+    const { contacts } = whatsappCustomContacts(whatsappCustomDraft.contacts);
+    const message = whatsappCustomDraft.message.trim();
+    if (!message || !contacts.length) return;
+    const minutes = (contacts.length - 1) * WHATSAPP_BROADCAST_INTERVAL_MIN;
+    const timing = contacts.length > 1
+        ? ` Между сообщениями ${WHATSAPP_BROADCAST_INTERVAL_MIN} минуты, последнее уйдёт примерно через ${minutes} мин.`
+        : '';
+    const question = `Разослать своё сообщение на ${contacts.length} номер(ов)?\n\n«${whatsappCustomText(message, contacts[0].name).slice(0, 200)}»\n${timing} Компьютер с WhatsApp должен быть включён.`;
+    if (!await customConfirm(question, { yesText: 'Разослать', noText: 'Отмена' })) return;
+    const endOfDay = new Date();
+    endOfDay.setHours(23, 59, 0, 0);
+    whatsappBroadcastStarting = true;
+    updateWhatsappCustomSummary();
+    try {
+        const response = await fetch(`${API_URL}/admin/whatsapp-broadcasts`, {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                kind: 'custom',
+                intervalSec: WHATSAPP_BROADCAST_INTERVAL_MIN * 60,
+                items: contacts.map(contact => ({
+                    recipientName: contact.name || null,
+                    phone: contact.phone,
+                    content: whatsappCustomText(message, contact.name),
+                    expiresAt: endOfDay.toISOString(),
+                })),
+            }),
+        });
+        const result = await response.json();
+        if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось запустить рассылку');
+        const skippedText = result.skipped?.length
+            ? ` Пропущено ${result.skipped.length}: ${result.skipped.slice(0, 3).map(row => `${row.recipientName || 'без имени'} — ${row.reason}`).join('; ')}${result.skipped.length > 3 ? '…' : ''}.`
+            : '';
+        toast.success(`Рассылка запущена: ${result.broadcast.count} сообщ.${skippedText}`);
+        // Список ушёл в очередь: очищаем, чтобы второе нажатие не отправило его снова. Текст оставляем.
+        whatsappCustomDraft.contacts = '';
+        whatsappCustomSaveDraft();
+    } catch (error) {
+        toast.error(error.message || 'Не удалось запустить рассылку');
+    } finally {
+        whatsappBroadcastStarting = false;
+        await loadWhatsappBroadcasts();
+        renderWhatsappReminderContent();
+    }
+}
+
 async function renderWhatsappReminders(force = false) {
     const root = document.getElementById('whatsappRemindersRoot');
     if (!root) return;
@@ -573,8 +762,12 @@ async function renderWhatsappReminders(force = false) {
             return;
         }
     }
-    await loadWhatsappBroadcasts();
+    await Promise.all([
+        loadWhatsappBroadcasts(),
+        window.loadWhatsappInboxStatus?.().catch(() => {}),
+    ]);
     renderWhatsappReminderContent();
+    if (whatsappReminderFilter === 'inbox' && typeof renderWhatsappInbox === 'function') await renderWhatsappInbox();
 }
 
 async function markWhatsappReminderSent(kind, itemId, studentId, checkbox) {
@@ -628,6 +821,7 @@ async function updateWhatsappRemindersBadge(value) {
 
 window.renderWhatsappReminders = renderWhatsappReminders;
 window.setWhatsappReminderFilter = setWhatsappReminderFilter;
+window.whatsappReminderOpenInbox = () => { whatsappReminderFilter = 'inbox'; };
 window.openWhatsappReminder = openWhatsappReminder;
 window.copyWhatsappReminder = copyWhatsappReminder;
 window.markWhatsappReminderSent = markWhatsappReminderSent;

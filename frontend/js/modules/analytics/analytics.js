@@ -1159,7 +1159,7 @@ async function renderAnalyticsOverview(pane) {
         ${analyticsSectionHeader('За выбранный период', 'Ключевые метрики периода: пробные, конверсия, средний чек и средняя жизнь ученика.', 'Period', 'analyticsPeriodMetrics')}
         <div class="analytics-grid">
             ${analyticsCard('Новые диагностики', p.newTrialsInPeriod ?? 0, 'Назначенные диагностические уроки в периоде')}
-            ${analyticsCard('Диагностика оплачена', analyticsFormatMoney(p.trialRevenue ?? 0), `${p.trialRevenueCount || 0} невозвратных оплат по 2000 ₸`) }
+            ${analyticsCard('Диагностика оплачена', analyticsFormatMoney(p.trialRevenue ?? 0), `${p.trialRevenueCount || 0} оплат по 2000 ₸`) }
             ${analyticsCard('Конверсия пробный → оплата', analyticsFormatPercent(conv.percent), `${conv.converted} из ${conv.total} (деньги поступили на баланс)`)}
             ${analyticsCard('Средний чек', analyticsFormatMoney(p.avgCheck), 'По completed-платежам за абонемент в периоде')}
             ${analyticsCard('Средняя продолжительность', `${p.avgLifespanMonths || 0} мес`, lifespanHint)}

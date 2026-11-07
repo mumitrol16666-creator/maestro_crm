@@ -411,8 +411,23 @@ function bookingStudentAge(value) {
     return age >= 0 && age <= 120 ? age : null;
 }
 
-function bookingStudentAgeLabel(value) {
-    const age = bookingStudentAge(value);
+// Возраст с сайта: строка «Возраст: 7 лет» или «Возраст: 35» в notes заявки.
+// Принимаем только число (1–120) с необязательным «год/года/лет»; всё остальное считаем мусором.
+function bookingNoteAge(notes) {
+    const match = /^(\d{1,3})\s*(?:лет|года|год)?$/i.exec(bookingNoteValue(notes, 'Возраст'));
+    if (!match) return null;
+    const age = Number(match[1]);
+    return age >= 1 && age <= 120 ? age : null;
+}
+
+// Дата рождения главнее: возраст из notes берём, только если даты рождения нет или она не читается.
+function bookingDisplayAge(booking) {
+    const fromBirth = bookingStudentAge(booking?.dateOfBirth);
+    return fromBirth !== null ? fromBirth : bookingNoteAge(booking?.notes);
+}
+
+function bookingStudentAgeLabel(booking) {
+    const age = bookingDisplayAge(booking);
     if (age === null) return '';
     const mod10 = age % 10;
     const mod100 = age % 100;
@@ -526,7 +541,7 @@ function bookingCardTimeline(booking) {
 }
 
 function bookingCardQuestionnaire(booking, quiz) {
-    const age = bookingStudentAgeLabel(booking.dateOfBirth);
+    const age = bookingStudentAgeLabel(booking);
     const contactName = quiz.parentName
         || bookingNoteValue(booking.notes, 'Контактное лицо')
         || 'Не указано';
@@ -1051,7 +1066,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                     <div class="card-field-value booking-person">
                         <div class="booking-person-heading">
                             <strong class="booking-person-name">${escapeBookingText(formatBookingFio(booking) || 'Без имени')}</strong>
-                            ${bookingStudentAgeLabel(booking.dateOfBirth) ? `<span class="booking-student-age">${escapeBookingText(bookingStudentAgeLabel(booking.dateOfBirth))}</span>` : ''}
+                            ${bookingStudentAgeLabel(booking) ? `<span class="booking-student-age">${escapeBookingText(bookingStudentAgeLabel(booking))}</span>` : ''}
                         </div>
                         ${renderBookingSafety(booking)}
                     </div>

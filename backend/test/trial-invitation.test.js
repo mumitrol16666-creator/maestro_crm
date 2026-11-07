@@ -25,6 +25,10 @@ test('после назначения пробного формируется п
     assert.match(invitation.message, /остался один шаг/);
     assert.match(invitation.message, /2\s000 ₸/);
     assert.match(invitation.message, /https:\/\/pay\.kaspi\.kz\/pay\/ku3aldre/);
+    assert.match(invitation.message, /заранее/);
+    assert.match(invitation.message, /по ссылке Kaspi/);
+    assert.match(invitation.message, /не позже чем за сутки[^\n]*вернём деньги/);
+    assert.doesNotMatch(invitation.message, /невозврат|не возвращ/i);
     assert.match(invitation.message, /инструмент/);
     assert.match(invitation.whatsappUrl, /^https:\/\/wa\.me\/77077570307\?text=/);
 });
@@ -44,6 +48,7 @@ test('для оплаченного диагностического урока 
     assert.doesNotMatch(invitation.message, /2\s000 ₸/);
     assert.doesNotMatch(invitation.message, /pay\.kaspi\.kz/);
     assert.doesNotMatch(invitation.message, /оплатить диагностический урок/i);
+    assert.doesNotMatch(invitation.message, /вернём деньги/);
 });
 
 test('приглашение не создаётся без даты пробного', () => {

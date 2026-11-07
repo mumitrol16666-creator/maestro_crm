@@ -246,10 +246,17 @@ deploy_learning_platform() {
 
   log "LP frontend..."
   cd "$LP_DIR/web_app"
+  # The school's WhatsApp for «Забыли пароль?» on /login is kept on the server only, in
+  # $LP_DIR/backend/.env (sourced above): NEXT_PUBLIC_SCHOOL_WHATSAPP="+7…". Empty = no button,
+  # the line says «напишите администратору школы». rsync --delete wipes other web_app env files.
+  if [ -z "${NEXT_PUBLIC_SCHOOL_WHATSAPP:-}" ]; then
+    log "NEXT_PUBLIC_SCHOOL_WHATSAPP is empty: /login shows no WhatsApp button"
+  fi
   cat > .env.local <<EOF
 NEXT_PUBLIC_API_URL=/api/v1
 NEXT_PUBLIC_CRM_API_URL=https://${CRM_DOMAIN}
 NEXT_PUBLIC_TRIAL_LANDING_URL="https://maestro.com.kz/?utm_source=app#zapis"
+NEXT_PUBLIC_SCHOOL_WHATSAPP="${NEXT_PUBLIC_SCHOOL_WHATSAPP:-}"
 NEXT_PUBLIC_RELEASE_SHA=${LP_RELEASE_SHA}
 NEXT_PUBLIC_RELEASE_BUILT_AT=${LP_RELEASE_BUILT_AT}
 EOF

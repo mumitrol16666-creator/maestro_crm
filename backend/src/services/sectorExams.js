@@ -302,6 +302,9 @@ function studentExamTitle(lessonTitle) {
     // invited «на Базовая подготовка · 4 ученика». The invitation names the exam by its title.
     const session = title.match(/^(.+?) · \d+ учени/);
     if (session) return `Экзамен «${session[1]}»`;
+    // One pupil: «<session title> · <direction>» (sectorExamTitle); old titles start with «Экзамен».
+    const single = title.match(/^(.+?) · [^·]+$/);
+    if (single && !/^Экзамен/.test(title)) return `Экзамен «${single[1]}»`;
     return lessonTitle || 'Экзамен сектора';
 }
 

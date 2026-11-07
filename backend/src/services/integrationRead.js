@@ -242,7 +242,9 @@ function mapStudentLesson(cls, now = new Date(), homeworkReview = null, reviewCo
 
     return {
         crmClassId: cls.id,
-        title: cls.title,
+        // 07.11 (P3): an exam lesson's title counts its pupils («… · 4 ученика»); the pupil and the
+        // parent see the exam's name, as in the WhatsApp invitation.
+        title: cls.classType === 'exam' ? require('./sectorExams').studentExamTitle(cls.title) : cls.title,
         date: cls.date,
         startTime: cls.startTime,
         endTime: cls.endTime,

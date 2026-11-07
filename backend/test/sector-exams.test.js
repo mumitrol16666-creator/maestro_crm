@@ -104,3 +104,8 @@ test('07.11: a session exam is named by its title in the invitation, the Telegra
     const text = formatSectorExamScheduledMessage({ title: 'Переход в квартеты · 2 ученика', date: '2026-11-12', startTime: '16:00', endTime: '17:00' }, [{ studentName: 'Аруна Б.' }, { studentName: 'Ерлан К.', title: '' }]);
     assert.match(text, /• Аруна Б\.\n• Ерлан К\./);
 });
+
+test('07.11: a one-pupil session exam is named by its title too; old titles stay', () => {
+    assert.equal(studentExamTitle('Первый сектор ноябрь · Гитара'), 'Экзамен «Первый сектор ноябрь»');
+    assert.equal(studentExamTitle('Экзамен сектора · Гитара'), 'Экзамен сектора · Гитара');
+});

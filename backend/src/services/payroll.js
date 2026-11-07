@@ -158,6 +158,17 @@ async function reconcileLockedClassPayrollAdjustment(db, classId, actorId, now =
     return { ...adjustment, status: 'created', operation };
 }
 
+// 07.11 (audit Д4): staff deactivated before the termination date existed (release 04.11) have no
+// employmentEndDate. Their registers up to the release stay exactly as they were then; from the
+// release on nothing accrues. The admin sets the real date in the card to correct earlier months.
+const LEGACY_TERMINATION_CUTOFF = new Date('2026-11-04T00:00:00+05:00');
+
+function effectiveEmploymentEndDate(employee) {
+    if (!employee) return null;
+    if (employee.employmentEndDate) return employee.employmentEndDate;
+    return employee.status === 'inactive' ? LEGACY_TERMINATION_CUTOFF : null;
+}
+
 function calculateFixedSalaryForRange(monthlySalary, rangeStart, rangeEnd, employmentStartDate = null, employmentEndDate = null) {
     if (employmentEndDate) {
         const cutoff = new Date(employmentEndDate);
@@ -618,6 +629,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
                 teacherName: name,
                 role: employee?.role || null,
                 isInactive: employee?.status === 'inactive',
+                needsEmploymentEndDate: employee?.status === 'inactive' && !employee?.employmentEndDate,
                 position: employee?.staffPosition || (employee?.role === 'teacher' ? 'Преподаватель' : 'Сотрудник'),
                 lessons: 0,
                 lessonEarnings: 0,
@@ -646,11 +658,11 @@ async function buildPayrollRegister(db, range, employeeId = null) {
     for (const employee of employees) {
         const row = ensureRow(employee.id, formatPersonName(employee), employee);
         row.fixedSalary = calculateFixedSalaryForRange(
-            employee.status === 'inactive' && !employee.employmentEndDate ? 0 : employee.monthlySalary,
+            employee.monthlySalary,
             range.start,
             range.end,
             employee.employmentStartDate,
-            employee.employmentEndDate,
+            effectiveEmploymentEndDate(employee),
         );
         if (row.fixedSalary > 0) {
             row.timeline.push({
@@ -679,8 +691,8 @@ async function buildPayrollRegister(db, range, employeeId = null) {
             ? payment.relatedPayment?.paymentDate || payment.paymentDate
             : payment.paymentDate;
         if (employee?.employmentStartDate && commissionDate < employee.employmentStartDate) continue;
-        if (employee?.employmentEndDate && commissionDate >= employee.employmentEndDate) continue;
-        if (employee?.status === 'inactive' && !employee.employmentEndDate) continue;
+        const commissionEndDate = effectiveEmploymentEndDate(employee);
+        if (commissionEndDate && commissionDate >= commissionEndDate) continue;
         row.salesBase += payment.status === 'refunded'
             ? -roundMoney(payment.amount)
             : roundMoney(payment.amount);
@@ -838,9 +850,21 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         row.timeline.sort((a, b) => new Date(a.date) - new Date(b.date));
     }
 
-    // Former employees remain visible for real historical activity only.
-    const employeeRows = Array.from(rows.values())
-        .filter(row => !row.isInactive || row.timeline.length > 0);
+    // Keep real history for former employees, but do not add empty register rows
+    // merely because the old account still has a payroll role or settings.
+    const allRows = Array.from(rows.values());
+    const employeeRows = allRows.filter(row => !row.isInactive || row.timeline.length > 0);
+    // Former employees with nothing in this period stay out of the register and totals,
+    // but the operation form still lists them (e.g. a settlement booked after leaving).
+    const formerEmployees = allRows
+        .filter(row => row.isInactive && row.timeline.length === 0)
+        .map(row => ({
+            employeeId: row.employeeId,
+            employeeName: row.employeeName,
+            position: row.position,
+            isInactive: true,
+            due: 0,
+        }));
     const totals = employeeRows.reduce((acc, row) => {
         acc.employees += 1;
         if (row.role === 'teacher') acc.teachers += 1;
@@ -875,6 +899,7 @@ async function buildPayrollRegister(db, range, employeeId = null) {
         totals,
         employees: employeeRows,
         teachers: employeeRows,
+        formerEmployees,
     };
 }
 

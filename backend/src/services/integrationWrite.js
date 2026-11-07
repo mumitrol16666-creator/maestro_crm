@@ -499,6 +499,18 @@ async function adminSetAttendance(crmClassId, { studentId, attended, attendanceS
         if (['completed', 'cancelled'].includes(cls.status)) {
             return { success: false, error: 'Class is already closed', status: 400 };
         }
+        // Same guard as the teacher path (57a7958): the admin «за преподавателя» in the app goes through
+        // this route too, and a late «Отменить урок» (e.g. queued while CRM was down) must not rewrite a
+        // report that already says the lesson was held into «прогул» for everyone — a charge per student
+        // and the teacher's rate. Attendance of a report under review is decided at approval in CRM.
+        if (cls.status === 'pending_admin_review') {
+            return {
+                success: false,
+                error: 'Отчёт уже у администратора: посещаемость меняет администратор при подтверждении',
+                status: 409,
+                code: 'LESSON_PENDING_REVIEW',
+            };
+        }
 
         const trialBooking = cls.classType === 'trial'
             ? { id: 'class-type-trial' }

@@ -46,6 +46,12 @@ if (!process.env.TEST_DATABASE_URL) {
   const late=await teacherSetAttendance(pending.id,{crmTeacherId:teacher.id,studentId:pupil.id,attendanceStatus:'unexcused_absence'});
   assert.equal(late.status,409);assert.equal(late.code,'LESSON_PENDING_REVIEW');
   assert.equal(await prisma.classAttendee.count({where:{classId:pending.id,studentId:pupil.id}}),0);
+  // 02.11: the admin «за преподавателя» path is refused the same way — a queued «Отменить урок» delivered
+  // after the report reached the admin must not flip a held lesson into «прогул» for everyone.
+  const lateAdmin=await adminSetAttendance(pending.id,{studentId:pupil.id,attendanceStatus:'unexcused_absence',teacherNote:'Урок отменён'});
+  assert.equal(lateAdmin.status,409);assert.equal(lateAdmin.code,'LESSON_PENDING_REVIEW');
+  assert.equal(await prisma.classAttendee.count({where:{classId:pending.id,studentId:pupil.id}}),0);
+  assert.equal((await prisma.class.findUnique({where:{id:pending.id}})).teacherOutcomeHint,'held');
  });
  test('service cannot reopen a lesson or replay an old reopen response',async()=>{
   const express=require('express');const app=express();app.use(express.json());app.use(require('../src/middleware/idempotency'));

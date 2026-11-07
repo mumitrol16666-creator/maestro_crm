@@ -16205,3 +16205,152 @@ html[data-theme="light"] .sidebar-toggle {
     font-weight: 600;
 }
 .sector-exam-offer[hidden], .sector-exam-banner[hidden] { display: none; }
+
+/* WhatsApp: один раздел — шапка с состоянием бота, ряд вкладок, содержимое вкладки */
+.wa-hub-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 14px;
+    margin: 0 0 12px;
+}
+
+.wa-hub-status {
+    display: flex;
+    flex: 1 1 320px;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+    margin: 0;
+    padding: 7px 12px;
+    color: var(--ops-muted);
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 999px;
+    font-size: 0.82rem;
+    line-height: 1.35;
+}
+
+.wa-hub-status i {
+    flex: 0 0 9px;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    background: #f45b69;
+}
+
+.wa-hub-status.is-ok { color: var(--admin-text); }
+.wa-hub-status.is-ok i { background: #25d366; }
+.wa-hub-status.is-warn i { background: #f5c451; }
+.wa-hub-status.is-bad { border-color: rgba(244, 91, 105, 0.45); }
+
+.wa-hub-status button {
+    flex: 0 0 auto;
+    min-height: 32px;
+    padding: 4px 12px;
+    color: #0b2414;
+    background: #25d366;
+    border: 0;
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+}
+
+.wa-hub-refresh { margin-left: auto; }
+
+.wa-hub-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0 0 14px;
+    padding-bottom: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.wa-hub-tabs::-webkit-scrollbar { display: none; }
+
+.wa-hub-tabs button {
+    display: inline-flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 7px;
+    min-height: 40px;
+    padding: 7px 12px;
+    color: var(--ops-muted);
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 999px;
+    cursor: pointer;
+    font: inherit;
+    font-size: 0.82rem;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.wa-hub-tabs button.is-inbox { margin-right: 8px; }
+
+.wa-hub-tabs button.active {
+    color: var(--admin-text);
+    background: rgba(37, 211, 102, 0.12);
+    border-color: rgba(37, 211, 102, 0.6);
+}
+
+.wa-hub-count {
+    min-width: 22px;
+    padding: 1px 6px;
+    color: #25d366;
+    background: rgba(37, 211, 102, 0.12);
+    border-radius: 999px;
+    font-size: 0.78rem;
+    text-align: center;
+}
+
+.wa-hub-count.is-hot {
+    color: #0b2414;
+    background: #25d366;
+}
+
+#whatsappInboxRoot .wa-inbox-page { gap: 10px; }
+.wa-inbox-queue { margin: 0; color: var(--ops-muted); font-size: 0.82rem; }
+
+@media (max-width: 640px) {
+    .wa-hub-tabs { flex-wrap: nowrap; }
+    .wa-hub-status { border-radius: 14px; }
+    .wa-hub-tabs button { min-height: 44px; }
+}
+
+/* Переписка WhatsApp в светлой теме: раньше часть текста была белой на светлом */
+html[data-theme="light"] .wa-inbox-toolbar,
+html[data-theme="light"] .wa-inbox-workspace { background: var(--ops-surface, #fff); border-color: rgba(24,24,22,.1); }
+html[data-theme="light"] .wa-inbox-filters button:not(.active),
+html[data-theme="light"] .wa-inbox-refresh,
+html[data-theme="light"] .wa-detail-actions button,
+html[data-theme="light"] .wa-inbox-search input,
+html[data-theme="light"] .wa-link-panel input,
+html[data-theme="light"] .wa-composer textarea,
+html[data-theme="light"] #waLinkResults > button { background: rgba(24,24,22,.04); border-color: rgba(24,24,22,.14); }
+html[data-theme="light"] .wa-conversation-list,
+html[data-theme="light"] .wa-conversation-item,
+html[data-theme="light"] .wa-detail-head,
+html[data-theme="light"] .wa-link-panel,
+html[data-theme="light"] .wa-composer { border-color: rgba(24,24,22,.09); }
+html[data-theme="light"] .wa-inbox-search span,
+html[data-theme="light"] .wa-detail-head p,
+html[data-theme="light"] #waLinkResults small,
+html[data-theme="light"] #waLinkResults em,
+html[data-theme="light"] .wa-message footer,
+html[data-theme="light"] .wa-composer small,
+html[data-theme="light"] .wa-inbox-empty,
+html[data-theme="light"] .wa-conversation-meta em { color: rgba(24,24,22,.55); }
+html[data-theme="light"] .wa-inbox-empty strong,
+html[data-theme="light"] .wa-outbox-state span { color: rgba(24,24,22,.8); }
+html[data-theme="light"] .wa-conversation-meta em { background: rgba(24,24,22,.06); }
+html[data-theme="light"] .wa-message:not(.outgoing) { background: rgba(24,24,22,.06); }
+
+@media (max-width: 900px) {
+    /* flex: 1 давал фильтрам нулевую основу, и они сжимались в одну строку с поиском */
+    #whatsappInboxRoot .wa-inbox-filters { flex: 1 1 100%; }
+    #whatsappInboxRoot .wa-inbox-queue { flex-basis: 100%; order: 3; }
+}

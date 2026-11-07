@@ -387,6 +387,7 @@ async function broadcastOverview(db, { now = new Date() } = {}) {
     return {
         worker: {
             online,
+            alive: fresh,
             status: session?.status || 'stopped',
             broadcastEnabled: session?.metadata?.broadcast === true,
             lastHeartbeatAt: session?.lastHeartbeatAt || null,

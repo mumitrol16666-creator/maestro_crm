@@ -91,17 +91,23 @@ function whatsappInboxRenderStatus() {
     const workerAlive = status.workerAlive;
     const session = status.session;
     const needsQr = Boolean(workerAlive && session?.status === 'qr_required');
+    const broken = Boolean(workerAlive && session?.status === 'degraded');
     const statusTitle = online
         ? `WhatsApp подключён · ${session?.mode === 'manual' ? 'ручная отправка' : 'наблюдение'}`
         : needsQr
             ? 'Требуется подключить WhatsApp'
-            : workerAlive
-                ? 'Worker запущен · подключение проверяется'
-                : 'Worker не в сети';
+            : broken
+                ? 'Бот WhatsApp запущен, но WhatsApp в нём не открывается'
+                : workerAlive
+                    ? 'Worker запущен · подключение проверяется'
+                    : 'Worker не в сети';
+    const reason = broken && session?.stoppedReason
+        ? ` · ошибка: ${whatsappInboxEscape(String(session.stoppedReason).slice(0, 120))}`
+        : '';
     sessionRoot.innerHTML = `
         <span class="wa-status-dot ${online ? 'online' : needsQr ? 'attention' : 'offline'}"></span>
         <span class="wa-inbox-session-copy"><strong>${whatsappInboxEscape(statusTitle)}</strong>
-        <small>${session ? `Последний сигнал: ${whatsappInboxEscape(whatsappInboxDate(session.lastHeartbeatAt, true))}` : 'Сессия ещё не запускалась'}</small></span>
+        <small>${session ? `Последний сигнал: ${whatsappInboxEscape(whatsappInboxDate(session.lastHeartbeatAt, true))}${reason}` : 'Сессия ещё не запускалась'}</small></span>
         ${needsQr ? '<button type="button" class="wa-qr-open" data-wa-action="show-qr">Показать QR-код</button>' : ''}`;
     const totals = status.totals || {};
     statsRoot.innerHTML = [

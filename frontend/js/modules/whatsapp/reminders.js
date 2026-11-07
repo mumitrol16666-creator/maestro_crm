@@ -395,13 +395,18 @@ function whatsappBroadcastPanel(kind, items, { startButton = true } = {}) {
     const ready = items.filter(item => whatsappBroadcastReady(kind, item)).length;
     const locked = items.filter(item => whatsappBroadcastLock(item)).length;
     const notReady = items.filter(item => !whatsappBroadcastLock(item) && !whatsappBroadcastFillable(kind, item)).length;
+    const lastSeen = worker?.lastHeartbeatAt ? ` (последний раз в ${whatsappReminderEscape(whatsappBroadcastTime(worker.lastHeartbeatAt))})` : '';
     const workerLine = !overview
         ? ''
         : worker?.online && !worker.broadcastEnabled
-            ? '<span class="whatsapp-broadcast-worker">WhatsApp подключён, но рассылка в нём выключена. Сообщения будут ждать</span>'
+            ? '<span class="whatsapp-broadcast-worker">Бот WhatsApp подключён, но рассылка в нём выключена. Сообщения встанут в очередь и будут ждать</span>'
         : worker?.online
-            ? '<span class="whatsapp-broadcast-worker is-online">WhatsApp на компьютере школы на связи</span>'
-            : `<span class="whatsapp-broadcast-worker">WhatsApp на компьютере школы не на связи${worker?.lastHeartbeatAt ? ` · был в ${whatsappReminderEscape(whatsappBroadcastTime(worker.lastHeartbeatAt))}` : ''}. Рассылка начнётся, когда он включится</span>`;
+            ? '<span class="whatsapp-broadcast-worker is-online">Бот WhatsApp подключён, рассылка пойдёт сразу</span>'
+        : worker?.alive && worker.status === 'qr_required'
+            ? '<span class="whatsapp-broadcast-worker">Бот WhatsApp вышел из аккаунта: нужно отсканировать QR в разделе «WhatsApp». До этого рассылка не пойдёт</span>'
+        : worker?.alive && worker.status === 'degraded'
+            ? '<span class="whatsapp-broadcast-worker">Бот WhatsApp запущен, но WhatsApp в нём не открывается. Рассылка не пойдёт, пока его не перезапустить</span>'
+            : `<span class="whatsapp-broadcast-worker">Бот WhatsApp выключен${lastSeen}. Рассылка не пойдёт, пока его не запустить на компьютере школы</span>`;
 
     const block = (row, isRunning) => {
         const total = row.items.length;

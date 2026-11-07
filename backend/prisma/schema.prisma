@@ -1617,6 +1617,51 @@ model WhatsappOutbox {
   @@index([conversationId, createdAt(sort: Desc)])
 }
 
+// Рассылка из «Напоминаний»: CRM держит очередь и паузу между сообщениями,
+// WhatsApp-воркер забирает по одному сообщению и сообщает результат.
+model WhatsappBroadcast {
+  id          String    @id @default(cuid())
+  kind        String // today | tomorrow | homework | exam | oneLesson | tasks
+  label       String
+  status      String    @default("running") // running | done | cancelled
+  intervalSec Int       @default(180)
+  createdById String?
+  finishedAt  DateTime?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  items WhatsappBroadcastItem[]
+
+  @@index([status, createdAt])
+}
+
+model WhatsappBroadcastItem {
+  id                String    @id @default(cuid())
+  broadcastId       String
+  reminderId        String
+  studentId         String?
+  recipientName     String?
+  phone             String
+  content           String    @db.Text
+  position          Int
+  // Позже этого времени не отправлять: «Сегодня урок» после начала урока уже не нужен.
+  expiresAt         DateTime?
+  status            String    @default("pending") // pending | claimed | sent | invalid | failed | uncertain | cancelled | expired | duplicate
+  claimedBy         String?
+  claimedAt         DateTime?
+  sentAt            DateTime?
+  externalMessageId String?
+  lastError         String?   @db.Text
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  broadcast WhatsappBroadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId, status, position])
+  @@index([status, claimedAt])
+  @@index([reminderId])
+}
+
 model BlogPost {
   id              String    @id @default(cuid())
   title           String

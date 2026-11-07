@@ -118,3 +118,32 @@ test('employment cutoff edits require payroll permission', () => {
     assert.ok(requiredPermissions({ method: 'PUT', originalUrl: '/api/users/employee',
         body: { employmentEndDate: '2026-09-01' } }).includes('canManagePayments'));
 });
+
+// 07.11 audit Д4: deactivated before 04.11, so no employmentEndDate was ever stored.
+test('staff deactivated without a termination date keep their earlier debt and stop accruing after 04.11', async () => {
+    const legacy = { ...employee('legacy'), role: 'manager', monthlySalary: 150000 };
+    const september = await buildMonthlyPayroll(database({ employees: [legacy], operations: [
+        { id: 'payout', teacherId: 'legacy', type: 'payout', amount: 100000, date: new Date('2026-09-25') },
+    ] }), '2026-09');
+    assert.equal(september.employees.length, 1);
+    assert.equal(september.employees[0].fixedSalary, 150000);
+    assert.equal(september.totals.due, 50000, 'the debt from before the release is still payable');
+    assert.equal(september.employees[0].needsEmploymentEndDate, true);
+
+    const october = await buildMonthlyPayroll(database({ employees: [legacy] }), '2026-10');
+    assert.equal(october.employees[0].fixedSalary, 150000, 'October is a full month, as before the release');
+    for (const month of ['2026-11', '2026-12']) {
+        const later = await buildMonthlyPayroll(database({ employees: [legacy] }), month);
+        assert.equal(later.totals.fixedSalary, 0, `nothing accrues in ${month}`);
+        assert.deepEqual(later.employees, []);
+    }
+});
+
+test('commission of staff deactivated without a date stays for sales before November only', async () => {
+    const seller = { ...employee('seller'), role: 'manager', salesCommissionPercent: 10 };
+    const sale = (id, date) => ({ id, managerId: 'seller', amount: 50000, status: 'paid', paymentDate: new Date(date) });
+    const october = await buildMonthlyPayroll(database({ employees: [seller], payments: [sale('oct', '2026-10-15')] }), '2026-10');
+    assert.equal(october.totals.salesCommission, 5000);
+    const november = await buildMonthlyPayroll(database({ employees: [seller], payments: [sale('nov', '2026-11-10')] }), '2026-11');
+    assert.equal(november.totals.salesCommission, 0);
+});

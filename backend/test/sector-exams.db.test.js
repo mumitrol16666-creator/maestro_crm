@@ -141,6 +141,11 @@ if (!process.env.TEST_DATABASE_URL) {
         assert.equal((await request(`/classes/${lesson.id}`,{method:'PATCH',body:{classType:'individual'}})).body.code,'EXAM_SESSION_REQUIRED');
         assert.equal((await request(`/classes/${lesson.id}`,{method:'PATCH',body:{price:5000}})).body.code,'EXAM_SESSION_REQUIRED');assert.equal(lesson.title,'Переход в квартеты · 6 учеников');
         assert.equal(await prisma.classSectorExam.count({where:{classId:lesson.id}}),6);
+        // 07.11 (P3): the exam lesson is in each pupil's schedule for the app («Следующий урок»).
+        const { getStudentOfflineSummary } = require('../src/services/integrationRead');
+        const summary = await getStudentOfflineSummary(pupils[2].id);
+        const lessons = [...summary.data.upcomingLessons, ...summary.data.lessonHistory];
+        assert.ok(lessons.some(row => row.crmClassId === lesson.id && row.classType === 'exam'), 'exam lesson in the pupil schedule');
         assert.equal((await book(exams.map(e=>e.examId),slot)).body.data.alreadyBooked,true);
         assert.equal((await book(exams.map(e=>e.examId),{...slot,startTime:'13:00',endTime:'14:30'})).body.code,'SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT');
         assert.equal((await request(`/sector-exams/classes/${lesson.id}/students`)).body.students.length,6);

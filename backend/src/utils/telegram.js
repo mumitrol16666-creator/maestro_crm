@@ -9,6 +9,10 @@ const TELEGRAM_CONFIG = {
     }
 };
 
+function escapeHtml(value) {
+    return String(value ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 /**
  * Форматирование сообщения о новой заявке
  */
@@ -23,14 +27,27 @@ function formatBookingMessage(booking) {
         minute: '2-digit'
     });
     
+    const isAppRegistration = booking.requestType === 'app_registration';
+    const messageTitle = isAppRegistration ? 'Регистрация в приложении' : title;
+    const fullName = isAppRegistration
+        ? [booking.name, booking.lastName].filter(Boolean).join(' ')
+        : booking.name;
+    // Free text from the app (e.g. the child's name entered by a parent).
+    const comment = isAppRegistration && booking.notes
+        ? String(booking.notes).split('\n').find(line => line.startsWith('Комментарий:'))
+        : null;
+    const commentLine = comment
+        ? `\n💬 ${escapeHtml(comment)}`
+        : '';
+
     return `
-${emoji} <b>${title}</b> ${emoji}
+${emoji} <b>${messageTitle}</b> ${emoji}
 ${separator}
 
-👤 <b>Имя:</b> ${booking.name}
-📱 <b>Телефон:</b> ${booking.phone}
-🎭 <b>Направление:</b> ${booking.direction}
-📍 <b>Источник:</b> ${booking.source || 'Не указан'}
+👤 <b>Имя:</b> ${escapeHtml(fullName)}
+📱 <b>Телефон:</b> ${escapeHtml(booking.phone)}
+🎭 <b>Направление:</b> ${escapeHtml(booking.direction)}
+📍 <b>Источник:</b> ${escapeHtml(booking.source || 'Не указан')}${commentLine}
 📅 <b>Дата:</b> ${date}
 
 ${separator}

@@ -11805,6 +11805,93 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
     border-color: rgba(37, 211, 102, 0.55);
 }
 
+.whatsapp-broadcast {
+    display: grid;
+    gap: 10px;
+    margin: 0 0 16px;
+    padding: 14px 16px;
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 16px;
+}
+
+.whatsapp-broadcast-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 10px 16px;
+}
+
+.whatsapp-broadcast-start {
+    min-height: 44px;
+    padding: 10px 18px;
+    color: #0b2414;
+    background: #25d366;
+    border: 0;
+    border-radius: 12px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 800;
+}
+
+.whatsapp-broadcast-start:disabled {
+    opacity: 0.45;
+    cursor: default;
+}
+
+.whatsapp-broadcast-worker {
+    color: var(--ops-muted);
+    font-size: 0.82rem;
+}
+
+.whatsapp-broadcast-worker.is-online {
+    color: #1f9d55;
+    font-weight: 700;
+}
+
+.whatsapp-broadcast-note {
+    margin: 0;
+    color: var(--ops-muted);
+    font-size: 0.82rem;
+}
+
+.whatsapp-message-note.is-broadcast {
+    color: #1f7a45;
+    font-weight: 700;
+}
+
+.whatsapp-broadcast-progress {
+    display: grid;
+    gap: 8px;
+    padding-top: 10px;
+    border-top: 1px solid var(--ops-border);
+}
+
+.whatsapp-broadcast-progress p {
+    margin: 0;
+    font-weight: 700;
+}
+
+.whatsapp-broadcast-progress ul {
+    margin: 0;
+    padding-left: 18px;
+    color: #c0392b;
+    font-size: 0.82rem;
+}
+
+.whatsapp-broadcast-stop {
+    justify-self: start;
+    min-height: 40px;
+    padding: 8px 14px;
+    color: #c0392b;
+    background: transparent;
+    border: 1px solid currentColor;
+    border-radius: 10px;
+    cursor: pointer;
+    font: inherit;
+    font-weight: 700;
+}
+
 .whatsapp-reminder-list {
     display: grid;
     gap: 12px;

@@ -36,7 +36,8 @@ function formatSectorExamScheduledMessage(classRecord, exams = [], added = false
         added ? '🎓 <b>Экзамен добавлен в урок</b>' : '🎓 <b>Назначен экзамен сектора</b>',
         escapeHtml(classRecord.title),
         `${day}.${month}.${year}, ${classRecord.startTime}–${classRecord.endTime}`,
-        ...exams.map(exam => `• ${escapeHtml(exam.studentName || 'Ученик')} — ${escapeHtml(exam.title || '')}`),
+        // 07.11 (P3): exams booked from an app session carry no per-pupil title; no «— » left hanging.
+        ...exams.map(exam => `• ${escapeHtml(exam.studentName || 'Ученик')}${exam.title ? ` — ${escapeHtml(exam.title)}` : ''}`),
         'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
     ].join('\n');
 }
@@ -754,4 +755,4 @@ async function sendEveningReportIfConfigured() {
     return result.sent;
 }
 
-module.exports = { notify, sendEveningReportIfConfigured, buildEveningReportStats, sendEveningReport };
+module.exports = { notify, sendEveningReportIfConfigured, buildEveningReportStats, sendEveningReport, formatSectorExamScheduledMessage };

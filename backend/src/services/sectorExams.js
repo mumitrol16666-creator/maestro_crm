@@ -84,6 +84,32 @@ function scheduleError(message, status = 400, code = 'SECTOR_EXAM_SCHEDULE_INVAL
     return Object.assign(new Error(message), { statusCode: status, code, ...extra });
 }
 
+/** The platform refused the exam for good: the sector was closed or the exam cancelled there. */
+function isPermanentScheduleRefusal(result) {
+    if (result.status !== 'rejected') return false;
+    const error = result.reason;
+    const code = error?.response?.data?.error?.code || error?.response?.data?.code || error?.code;
+    return error?.response?.status === 409 && code === 'SECTOR_EXAM_NOT_SCHEDULABLE';
+}
+
+/**
+ * 07.11 (review): the queue was read before a teacher closed the sector early, so the platform
+ * refused the booking. The refused exams leave the lesson; a lesson left without exams is cancelled,
+ * so nobody holds or is paid for an exam lesson that has no exam.
+ */
+async function releaseRefusedExams(db, lesson, examIds, results) {
+    const refused = examIds.filter((_, index) => isPermanentScheduleRefusal(results[index]));
+    if (!refused.length) return { refused, cancelled: false };
+    const cancelled = await db.$transaction(async (tx) => {
+        await tx.classSectorExam.deleteMany({ where: { classId: lesson.id, sectorExamId: { in: refused } } });
+        const left = await tx.classSectorExam.count({ where: { classId: lesson.id } });
+        if (left > 0) return false;
+        await tx.class.update({ where: { id: lesson.id }, data: { status: 'cancelled' } });
+        return true;
+    });
+    return { refused, cancelled };
+}
+
 /** Title of an exam lesson: the exam's own for one student, a count for several. */
 function examLessonTitle(exams) {
     if (exams.length === 1) return sectorExamTitle(exams[0]);
@@ -154,7 +180,14 @@ async function bookSectorExams(input, deps = {}) {
         );
         if (differentSlot) throw scheduleError('Этот экзамен уже назначен на другое время. Измените его в расписании CRM.',409,'SECTOR_EXAM_ALREADY_BOOKED_DIFFERENT_SLOT');
         const confirmations = await Promise.allSettled(already.map((row) => confirmSchedule(row.class, row.sectorExamId)));
-        return { class: booked, exams: [], alreadyBooked: true, platformConfirmed: confirmations.every(result => result.status === 'fulfilled') };
+        const release = await releaseRefusedExams(db, booked, already.map((row) => row.sectorExamId), confirmations);
+        if (release.cancelled) {
+            throw scheduleError('Экзамен отменён в приложении: сектор закрыт. Урок экзамена снят из расписания.', 409, 'SECTOR_EXAM_NOT_PENDING');
+        }
+        return {
+            class: booked, exams: [], alreadyBooked: true, refusedExamIds: release.refused,
+            platformConfirmed: confirmations.every((result, index) => result.status === 'fulfilled' || release.refused.includes(already[index].sectorExamId)),
+        };
     }
     if (already.length) {
         throw scheduleError('Часть экзаменов уже назначена. Обновите список.', 409, 'SECTOR_EXAM_ALREADY_BOOKED');
@@ -255,13 +288,18 @@ async function bookSectorExams(input, deps = {}) {
     // The platform notifies each student, their parents and the teacher. A failed call stays in
     // the integration log for a retry; the booking is kept and the next call re-sends it.
     const results = await Promise.allSettled(exams.map((exam) => confirmSchedule(lesson, exam.examId)));
+    const release = await releaseRefusedExams(db, lesson, examIds, results);
+    if (release.cancelled) {
+        throw scheduleError('Экзамен отменён в приложении, пока вы его назначали: сектор закрыт. Урок экзамена не создан.', 409, 'SECTOR_EXAM_NOT_PENDING');
+    }
     return {
+        refusedExamIds: release.refused,
         class: lesson,
         exams: exams.map((exam, index) => ({
             ...exam,
             studentName: exam.studentName || [students[index]?.lastName, students[index]?.name].filter(Boolean).join(' '),
         })),
-        platformConfirmed: results.every((result) => result.status === 'fulfilled'),
+        platformConfirmed: results.every((result, index) => result.status === 'fulfilled' || release.refused.includes(examIds[index])),
         alreadyBooked: false,
 
     };

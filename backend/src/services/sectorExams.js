@@ -297,8 +297,12 @@ function studentExamTitle(lessonTitle) {
     const group = title.match(/^(Экзамен сектора группы(?: \d+)?(?: · .+?)?) · \d+ учени/);
     if (group) return group[1];
     const shared = title.match(/^Экзамен секторов(?: · (.+?))? · \d+ учени/);
-    if (!shared) return lessonTitle || 'Экзамен сектора';
-    return shared[1] ? `Экзамен сектора · ${shared[1]}` : 'Экзамен сектора';
+    if (shared) return shared[1] ? `Экзамен сектора · ${shared[1]}` : 'Экзамен сектора';
+    // 07.11 (P3): since 05.11 a shared exam lesson is «<session title> · N учеников»; the pupil was
+    // invited «на Базовая подготовка · 4 ученика». The invitation names the exam by its title.
+    const session = title.match(/^(.+?) · \d+ учени/);
+    if (session) return `Экзамен «${session[1]}»`;
+    return lessonTitle || 'Экзамен сектора';
 }
 
 /** WhatsApp invitation to the exam, worded for the student or for a parent. */

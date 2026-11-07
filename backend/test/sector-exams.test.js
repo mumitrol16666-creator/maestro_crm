@@ -94,3 +94,13 @@ test('pupils booked into different lessons are not silently combined on a retry'
     const db={classSectorExam:{findMany:async()=>[{classId:'a',sectorExamId:'e1',class:{id:'a'}},{classId:'b',sectorExamId:'e2',class:{id:'b'}}]}};
     await assert.rejects(bookSectorExams({examIds:['e1','e2']},{db}),error=>error.code==='SECTOR_EXAM_ALREADY_BOOKED');
 });
+
+test('07.11: a session exam is named by its title in the invitation, the Telegram list has no empty dashes', () => {
+    assert.equal(studentExamTitle('Переход в квартеты · 4 ученика'), 'Экзамен «Переход в квартеты»');
+    const message = buildExamInvitationMessage({ audience: 'student', recipientName: 'Камбар', title: 'Переход в квартеты · 4 ученика', date: '2026-11-12', startTime: '16:00', roomName: 'Большой' });
+    assert.match(message, /Приглашаем вас на экзамен «Переход в квартеты»: 12 ноября в 16:00/);
+    assert.doesNotMatch(message, /учени/);
+    const { formatSectorExamScheduledMessage } = require('../src/services/notifications');
+    const text = formatSectorExamScheduledMessage({ title: 'Переход в квартеты · 2 ученика', date: '2026-11-12', startTime: '16:00', endTime: '17:00' }, [{ studentName: 'Аруна Б.' }, { studentName: 'Ерлан К.', title: '' }]);
+    assert.match(text, /• Аруна Б\.\n• Ерлан К\./);
+});

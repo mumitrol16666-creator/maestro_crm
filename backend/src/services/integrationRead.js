@@ -217,6 +217,9 @@ function getStudentClassWhere(crmStudentId, groupIds, dateFilter) {
         OR: [
             { individualStudentId: crmStudentId },
             ...(groupIds.length ? [{ groupId: { in: groupIds } }] : []),
+            // 07.11 (audit P3): an exam lesson has neither an individual student nor a group; its
+            // pupils are linked per exam. Without this the app's «Следующий урок» skipped the exam.
+            { sectorExams: { some: { studentId: crmStudentId } } },
         ],
     };
 }

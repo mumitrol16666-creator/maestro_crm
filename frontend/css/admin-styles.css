@@ -11805,6 +11805,46 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
     border-color: rgba(37, 211, 102, 0.55);
 }
 
+.whatsapp-custom {
+    display: grid;
+    gap: 14px;
+    margin: 0 0 16px;
+    padding: 16px;
+    background: var(--ops-surface);
+    border: 1px solid var(--ops-border);
+    border-radius: 16px;
+}
+
+.whatsapp-custom-field {
+    display: grid;
+    gap: 6px;
+    font-weight: 700;
+}
+
+.whatsapp-custom-field textarea {
+    width: 100%;
+    min-height: 96px;
+    padding: 10px 12px;
+    font: inherit;
+    font-weight: 400;
+    line-height: 1.5;
+    resize: vertical;
+}
+
+.whatsapp-custom-field small,
+.whatsapp-custom-preview {
+    color: var(--ops-muted);
+    font-size: 0.82rem;
+    font-weight: 400;
+}
+
+.whatsapp-custom-preview {
+    padding: 10px 12px;
+    white-space: pre-wrap;
+    background: rgba(37, 211, 102, 0.08);
+    border-radius: 10px;
+}
+
 .whatsapp-broadcast {
     display: grid;
     gap: 10px;

@@ -159,9 +159,11 @@ async function reconcileLockedClassPayrollAdjustment(db, classId, actorId, now =
 }
 
 // 07.11 (audit Д4): staff deactivated before the termination date existed (release 04.11) have no
-// employmentEndDate. Their registers up to the release stay exactly as they were then; from the
-// release on nothing accrues. The admin sets the real date in the card to correct earlier months.
-const LEGACY_TERMINATION_CUTOFF = new Date('2026-11-04T00:00:00+05:00');
+// employmentEndDate. Their registers up to October stay exactly as they were; from November on
+// nothing accrues (registers are built on UTC month bounds, so the cutoff is the UTC month start —
+// otherwise 1–3 November accrued for long-gone staff). The admin sets the real date in the card
+// to correct earlier months.
+const LEGACY_TERMINATION_CUTOFF = new Date('2026-11-01T00:00:00Z');
 
 function effectiveEmploymentEndDate(employee) {
     if (!employee) return null;

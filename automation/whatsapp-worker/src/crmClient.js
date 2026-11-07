@@ -59,6 +59,20 @@ class CrmClient {
         });
     }
 
+    claimBroadcast(accountKey) {
+        return this.request('/broadcast/claim', {
+            method: 'POST',
+            body: JSON.stringify({ accountKey }),
+        });
+    }
+
+    reportBroadcastResult(id, result) {
+        return this.request(`/broadcast/${encodeURIComponent(id)}/result`, {
+            method: 'POST',
+            body: JSON.stringify(result),
+        });
+    }
+
     alert(payload) {
         return this.request('/alert', {
             method: 'POST',

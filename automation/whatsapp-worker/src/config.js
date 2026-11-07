@@ -32,8 +32,12 @@ function loadConfig() {
         workerId: requireValue('WHATSAPP_BROWSER_WORKER_ID'),
         sessionPath: path.resolve(process.cwd(), process.env.WHATSAPP_SESSION_PATH || '../../sessions/whatsapp'),
         headless: parseBoolean(process.env.WHATSAPP_BROWSER_HEADLESS, false),
+        // «chrome» — установленный Google Chrome вместо скачанного Chromium (компьютер школы).
+        channel: String(process.env.WHATSAPP_BROWSER_CHANNEL || '').trim() || null,
         userAgent: String(process.env.WHATSAPP_BROWSER_USER_AGENT || DEFAULT_CHROME_USER_AGENT).trim(),
         openUnreadChats: parseBoolean(process.env.WHATSAPP_BROWSER_OPEN_UNREAD_CHATS, false),
+        // Рассылка из «Напоминаний» CRM: отдельный явный выключатель.
+        broadcast: parseBoolean(process.env.WHATSAPP_BROWSER_BROADCAST, false),
         mode,
         pollIntervalMs,
     };

@@ -7,6 +7,19 @@ const CONNECTED_SELECTORS = [
     '[aria-label="Список чатов"]',
 ];
 
+const COMPOSE_SELECTOR = 'footer [contenteditable="true"][role="textbox"], footer [contenteditable="true"]';
+// Строки переписки: новая вёрстка WhatsApp Web (conv-msg-*) и старая (message-out).
+const MESSAGE_ROW_SELECTOR = '#main [data-testid^="conv-msg-"], div.message-out';
+// Галочка сервера: «Отправлено», «Доставлено» или «Прочитано». Часы «Ожидание» не считаются.
+const DELIVERY_LABEL = /отправлено|доставлено|прочитано|\bsent\b|delivered|\bread\b/i;
+const INVALID_PHONE_TEXT = /invalid|недействител|не зарегистрирован|isn.t on whatsapp|not on whatsapp|нет в whatsapp/i;
+
+// WhatsApp рисует *жирный* без звёздочек, эмодзи картинками, а переносы по-своему:
+// сравниваем только буквы и цифры.
+function plainText(value) {
+    return String(value || '').replace(/[^\p{L}\p{N}]/gu, '').toLowerCase();
+}
+
 function extractChatId(messageId) {
     const match = String(messageId || '').match(/(\d{7,15}@(c\.us|s\.whatsapp\.net))/i);
     return match?.[1] || null;
@@ -92,8 +105,11 @@ class WhatsappWebObserver {
             });
         });
 
+        if (!messages.length) return [];
+        // Без открытого чата заголовка нет: не ждать его 30 секунд по умолчанию, иначе круг воркера
+        // растягивается и CRM видит его «не на связи».
         const displayName = await this.page.locator('header span[title]').first()
-            .getAttribute('title').catch(() => null);
+            .getAttribute('title', { timeout: 1000 }).catch(() => null);
         const imported = [];
         for (const item of messages) {
             const externalChatId = extractChatId(item.messageId);
@@ -139,6 +155,65 @@ class WhatsappWebObserver {
             };
         }
     }
+
+    // Рассылка: открыть чат по номеру с уже вставленным текстом, отправить,
+    // убедиться, что в чате появилось наше сообщение с галочкой, вернуться к списку чатов.
+    async sendBroadcastText({ phoneNumber, content }, { timeoutMs = 45000, confirmMs = 15000 } = {}) {
+        const digits = String(phoneNumber || '').replace(/\D/g, '');
+        if (digits.length < 7 || digits.length > 15) return { status: 'invalid', error: 'Некорректный номер' };
+        let pressedEnter = false;
+        try {
+            await this.page.goto(`${WHATSAPP_WEB_URL}send?phone=${digits}&text=${encodeURIComponent(content)}`, {
+                waitUntil: 'domcontentloaded',
+            });
+            const compose = this.page.locator(COMPOSE_SELECTOR).last();
+            const invalid = this.page.locator('[role="dialog"], [data-animate-modal-popup="true"]')
+                .filter({ hasText: INVALID_PHONE_TEXT }).first();
+            const opened = await Promise.race([
+                compose.waitFor({ state: 'visible', timeout: timeoutMs }).then(() => 'chat'),
+                invalid.waitFor({ state: 'visible', timeout: timeoutMs }).then(() => 'invalid'),
+            ]);
+            if (opened === 'invalid') return { status: 'invalid', error: 'Номера нет в WhatsApp' };
+
+            const expected = plainText(content).slice(0, 40);
+            const drafted = plainText(await compose.innerText().catch(() => ''));
+            if (!drafted || !expected.startsWith(drafted.slice(0, 20))) {
+                return { status: 'failed', error: 'Текст не вставился в поле сообщения' };
+            }
+
+            const rows = this.page.locator(MESSAGE_ROW_SELECTOR);
+            const readRows = () => rows.evaluateAll(nodes => nodes.slice(-8).map(node => ({
+                id: node.getAttribute('data-id') || node.closest('[data-id]')?.getAttribute('data-id') || '',
+                text: node.innerText || '',
+                labels: [...node.querySelectorAll('[aria-label]')].map(item => item.getAttribute('aria-label')).join(' '),
+            })));
+            const before = new Set((await readRows().catch(() => [])).map(row => row.id));
+            await compose.press('Enter');
+            pressedEnter = true;
+            // Отправлено, когда в чате появилась новая строка с нашим текстом и у неё есть галочка сервера.
+            const deadline = Date.now() + confirmMs;
+            let appeared = null;
+            while (Date.now() < deadline) {
+                await this.page.waitForTimeout(700);
+                const current = await readRows().catch(() => []);
+                appeared = current.find(row => !before.has(row.id) && plainText(row.text).includes(expected.slice(0, 30))) || appeared;
+                if (appeared && DELIVERY_LABEL.test(current.find(row => row.id === appeared.id)?.labels || '')) {
+                    return { status: 'sent', externalMessageId: appeared.id || null };
+                }
+            }
+            if (appeared) {
+                return { status: 'uncertain', error: 'Сообщение в чате, но WhatsApp не подтвердил отправку (часы вместо галочки)' };
+            }
+            return { status: 'uncertain', error: 'Enter нажат, но сообщение не появилось в чате' };
+        } catch (error) {
+            return {
+                status: pressedEnter ? 'uncertain' : 'failed',
+                error: String(error.message || error).slice(0, 1000),
+            };
+        } finally {
+            await this.page.goto(WHATSAPP_WEB_URL, { waitUntil: 'domcontentloaded' }).catch(() => {});
+        }
+    }
 }
 
-module.exports = { WHATSAPP_WEB_URL, CONNECTED_SELECTORS, extractChatId, inferMessageType, WhatsappWebObserver };
+module.exports = { WHATSAPP_WEB_URL, CONNECTED_SELECTORS, extractChatId, inferMessageType, plainText, WhatsappWebObserver };

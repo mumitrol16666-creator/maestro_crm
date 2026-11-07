@@ -109,3 +109,39 @@ test('07.11: a one-pupil session exam is named by its title too; old titles stay
     assert.equal(studentExamTitle('Первый сектор ноябрь · Гитара'), 'Экзамен «Первый сектор ноябрь»');
     assert.equal(studentExamTitle('Экзамен сектора · Гитара'), 'Экзамен сектора · Гитара');
 });
+
+test('07.11: an exam the platform refused (sector closed early) leaves the lesson, an empty lesson is cancelled', async () => {
+    const { bookSectorExams } = require('../src/services/sectorExams');
+    const booked = { id: 'lesson', date: new Date('2026-11-20'), startTime: '10:00', endTime: '11:00', teacherId: 'teacher', roomId: 'room' };
+    const refusal = Object.assign(new Error('409'), { response: { status: 409, data: { error: { code: 'SECTOR_EXAM_NOT_SCHEDULABLE' } } } });
+    const state = { rows: ['e1', 'e2'], status: 'scheduled' };
+    const tx = {
+        classSectorExam: {
+            deleteMany: async ({ where }) => { state.rows = state.rows.filter((id) => !where.sectorExamId.in.includes(id)); },
+            count: async () => state.rows.length,
+        },
+        class: { update: async ({ data }) => { state.status = data.status; } },
+    };
+    const db = {
+        classSectorExam: { findMany: async () => state.rows.map((id) => ({ sectorExamId: id, classId: 'lesson', class: booked })) },
+        $transaction: async (fn) => fn(tx),
+    };
+    const input = { examIds: ['e1', 'e2'] };
+    // One pupil's sector was closed: only that exam leaves, the lesson stays for the other.
+    const partial = await bookSectorExams(input, { db, confirmSchedule: async (_, id) => { if (id === 'e1') throw refusal; } });
+    assert.deepEqual(partial.refusedExamIds, ['e1']);
+    assert.equal(partial.platformConfirmed, true);
+    assert.deepEqual(state.rows, ['e2']);
+    assert.equal(state.status, 'scheduled');
+    // The last exam refused too: the lesson is cancelled and the administrator is told why.
+    await assert.rejects(
+        bookSectorExams({ examIds: ['e2'] }, { db, confirmSchedule: async () => { throw refusal; } }),
+        (error) => error.code === 'SECTOR_EXAM_NOT_PENDING' && /сектор закрыт/.test(error.message),
+    );
+    assert.equal(state.status, 'cancelled');
+    // An unavailable platform is not a refusal: the booking is kept for a retry.
+    state.rows = ['e3']; state.status = 'scheduled';
+    const kept = await bookSectorExams({ examIds: ['e3'] }, { db, confirmSchedule: async () => { throw new Error('unavailable'); } });
+    assert.equal(kept.platformConfirmed, false);
+    assert.equal(state.status, 'scheduled');
+});

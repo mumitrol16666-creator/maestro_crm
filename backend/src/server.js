@@ -250,6 +250,7 @@ if (process.env.MAESTRO_QA_LOCAL === 'true') {
 app.use('/api/whatsapp-meta', require('./routes/whatsappMeta'));
 app.use('/api/whatsapp-inbox', require('./routes/whatsappInbox'));
 app.use('/api/internal/whatsapp-browser', require('./routes/whatsappBrowserInternal'));
+app.use('/api/admin/whatsapp-broadcasts', require('./routes/whatsappBroadcasts'));
 // app.use('/api/bot', require('./routes/bot')); // Needs Migration
 
 app.get('/', (req, res) => {

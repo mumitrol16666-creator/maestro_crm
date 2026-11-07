@@ -2,7 +2,7 @@
   "name": "maestro-whatsapp-browser-worker",
   "version": "0.1.0",
   "private": true,
-  "description": "Observer-only WhatsApp Web connector for Maestro CRM",
+  "description": "WhatsApp Web connector for Maestro CRM: inbox observer and reminder broadcasts",
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",

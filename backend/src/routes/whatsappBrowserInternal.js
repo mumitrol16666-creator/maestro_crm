@@ -5,6 +5,7 @@ const { importInboundBatch } = require('../services/whatsappBrowserInbox');
 const { validateOutboxResult } = require('../services/whatsappOutboxPolicy');
 const { putWhatsappQr, clearWhatsappQr } = require('../services/whatsappQrStore');
 const { sendTelegramNotification } = require('../utils/telegram');
+const { BroadcastError, claimNextBroadcastItem, reportBroadcastItemResult } = require('../services/whatsappBroadcast');
 
 const router = express.Router();
 const ACCOUNT_KEY_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9._:-]{1,79}$/;
@@ -201,6 +202,44 @@ router.post('/outbox/claim', async (req, res) => {
     } catch (error) {
         console.error('[whatsapp-browser] claim:', error.message);
         return res.status(500).json({ success: false, error: 'Не удалось получить исходящее сообщение' });
+    }
+});
+
+// Рассылка из «Напоминаний»: следующее сообщение, когда прошла пауза (см. services/whatsappBroadcast).
+router.post('/broadcast/claim', async (req, res) => {
+    try {
+        const { accountKey } = req.body || {};
+        const session = await prisma.whatsappBrowserSession.findUnique({ where: { accountKey: String(accountKey || '') } });
+        if (!session || session.workerId !== req.whatsappWorkerId) {
+            return res.status(409).json({ success: false, error: 'Сессия worker не зарегистрирована' });
+        }
+        if (session.status !== 'connected' || !session.lastHeartbeatAt || session.lastHeartbeatAt < new Date(Date.now() - 45_000)) {
+            return res.status(409).json({ success: false, error: 'WhatsApp worker не подключён' });
+        }
+        const result = await claimNextBroadcastItem(prisma, { workerId: req.whatsappWorkerId });
+        return res.json({ success: true, message: result.item, waitSeconds: result.waitSeconds });
+    } catch (error) {
+        console.error('[whatsapp-browser] broadcast claim:', error.message);
+        return res.status(500).json({ success: false, error: 'Не удалось получить сообщение рассылки' });
+    }
+});
+
+router.post('/broadcast/:id/result', async (req, res) => {
+    try {
+        const result = await reportBroadcastItemResult(prisma, {
+            itemId: req.params.id,
+            workerId: req.whatsappWorkerId,
+            status: String(req.body?.status || ''),
+            error: req.body?.error,
+            externalMessageId: req.body?.externalMessageId,
+        });
+        return res.json({ success: true, result });
+    } catch (error) {
+        if (error instanceof BroadcastError) {
+            return res.status(error.status).json({ success: false, error: error.message });
+        }
+        console.error('[whatsapp-browser] broadcast result:', error.message);
+        return res.status(500).json({ success: false, error: 'Не удалось сохранить результат рассылки' });
     }
 });
 

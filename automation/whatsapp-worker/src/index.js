@@ -16,6 +16,7 @@ async function main() {
     const domRecognitionGuard = new DomRecognitionGuard();
     let lastQrImage = null;
     let lastQrUploadAt = 0;
+    let nextBroadcastCheckAt = 0;
 
     const heartbeat = async (status, extra = {}) => crm.heartbeat({
         accountKey: config.accountKey,
@@ -25,6 +26,7 @@ async function main() {
         metadata: {
             openUnreadChats: config.openUnreadChats,
             headless: config.headless,
+            broadcast: config.broadcast,
             ...extra.metadata,
         },
         ...extra,
@@ -44,7 +46,9 @@ async function main() {
     context = await chromium.launchPersistentContext(config.sessionPath, {
         headless: config.headless,
         viewport: { width: 1440, height: 1000 },
-        userAgent: config.userAgent,
+        // Подменять user-agent нужно только серверу без экрана: обычный Chrome WhatsApp принимает как есть.
+        ...(config.headless ? { userAgent: config.userAgent } : {}),
+        ...(config.channel ? { channel: config.channel } : {}),
         args: ['--disable-dev-shm-usage'],
     });
     const page = context.pages()[0] || await context.newPage();
@@ -54,7 +58,7 @@ async function main() {
     if (config.openUnreadChats) {
         console.warn('[worker] OPEN_UNREAD_CHATS=true: WhatsApp may mark scanned chats as read');
     }
-    console.log(`[worker] observer started; profile=${config.sessionPath}`);
+    console.log(`[worker] observer started; mode=${config.mode} broadcast=${config.broadcast} profile=${config.sessionPath}`);
 
     let failures = 0;
     while (!shuttingDown) {
@@ -90,6 +94,22 @@ async function main() {
                         const sendResult = await observer.sendApprovedText(claimed.message);
                         await crm.reportOutboxResult(claimed.message.id, sendResult);
                         console.log(`[worker] outbox=${claimed.message.id} status=${sendResult.status}`);
+                    }
+                }
+                if (config.broadcast && Date.now() >= nextBroadcastCheckAt) {
+                    const claimed = await crm.claimBroadcast(config.accountKey);
+                    if (claimed.message) {
+                        // Отправка занимает до минуты: CRM должна видеть, что воркер на связи.
+                        await heartbeat('connected');
+                        const sendResult = await observer.sendBroadcastText(claimed.message);
+                        await crm.reportBroadcastResult(claimed.message.id, sendResult);
+                        await heartbeat('connected');
+                        console.log(`[worker] broadcast=${claimed.message.id} status=${sendResult.status}`);
+                        nextBroadcastCheckAt = 0;
+                    } else {
+                        // CRM говорит, сколько ждать паузу; без рассылок спрашиваем раз в 15 секунд.
+                        const waitSeconds = Number(claimed.waitSeconds) || 15;
+                        nextBroadcastCheckAt = Date.now() + Math.min(Math.max(waitSeconds, 5), 60) * 1000;
                     }
                 }
             } else if (status === 'qr_required') {

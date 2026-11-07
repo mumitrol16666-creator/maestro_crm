@@ -10062,31 +10062,14 @@ html[data-theme="light"] .student-direction-options__loading {
 
 /* ==================== WHATSAPP INBOX ==================== */
 .wa-inbox-page { min-width: 0; width: 100%; display: grid; gap: 16px; color: var(--admin-text, #f4f1e8); }
-.wa-inbox-hero, .wa-inbox-toolbar, .wa-inbox-workspace, .wa-inbox-stats button {
+.wa-inbox-toolbar, .wa-inbox-workspace {
     background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.025));
     border: 1px solid rgba(255,255,255,.1); border-radius: 18px;
 }
-.wa-inbox-hero { display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 24px; }
-.wa-inbox-hero h2 { margin: 2px 0 6px; font-size: clamp(1.5rem, 3vw, 2.2rem); }
-.wa-inbox-hero p { margin: 0; color: rgba(255,255,255,.58); }
 .wa-inbox-eyebrow { color: #25d366 !important; font-size: .72rem; font-weight: 800; letter-spacing: .14em; text-transform: uppercase; }
-.wa-inbox-session { display: flex; align-items: center; min-width: 230px; gap: 10px; padding: 12px 14px; border-radius: 14px; background: rgba(0,0,0,.2); }
-.wa-inbox-session > span:last-child { display: grid; gap: 2px; }
-.wa-inbox-session-copy { display: grid; gap: 2px; min-width: 0; }
-.wa-inbox-session small { color: rgba(255,255,255,.5); }
-.wa-status-dot { width: 11px; height: 11px; border-radius: 50%; background: #f45b69; box-shadow: 0 0 0 5px rgba(244,91,105,.12); }
-.wa-status-dot.online { background: #25d366; box-shadow: 0 0 0 5px rgba(37,211,102,.12); }
-.wa-status-dot.attention { background: #f5c451; box-shadow: 0 0 0 5px rgba(245,196,81,.12); }
-.wa-qr-open { min-height: 36px; margin-left: 5px; padding: 8px 12px; border: 1px solid #25d366; border-radius: 10px; color: #092c17; background: #25d366; cursor: pointer; font: inherit; font-size: .72rem; font-weight: 850; white-space: nowrap; }
-.wa-qr-open:hover { background: #45df7d; }
-.wa-inbox-stats { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)); gap: 10px; }
-.wa-inbox-stats button { color: inherit; text-align: left; padding: 14px 16px; cursor: pointer; }
-.wa-inbox-stats button:disabled { cursor: default; opacity: 1; }
-.wa-inbox-stats span { display: block; color: rgba(255,255,255,.5); font-size: .75rem; }
-.wa-inbox-stats strong { display: block; margin-top: 3px; font-size: 1.45rem; }
 .wa-inbox-toolbar { min-width: 0; display: flex; align-items: end; gap: 12px; padding: 12px; }
 .wa-inbox-filters { min-width: 0; display: flex; flex: 1; gap: 6px; overflow-x: auto; }
-.wa-inbox-filters button, .wa-inbox-refresh, .wa-detail-actions button, .wa-link-current button {
+.wa-inbox-filters button, .wa-detail-actions button, .wa-link-current button {
     border: 1px solid rgba(255,255,255,.13); border-radius: 10px; background: rgba(0,0,0,.18); color: inherit; padding: 10px 13px; cursor: pointer; white-space: nowrap;
 }
 .wa-inbox-filters button.active { background: #25d366; border-color: #25d366; color: #092c17; font-weight: 800; }
@@ -10163,20 +10146,15 @@ html[data-theme="light"] .student-direction-options__loading {
 @keyframes wa-qr-spin { to { transform: rotate(360deg); } }
 
 @media (max-width: 760px) {
-    .wa-inbox-hero { align-items: stretch; flex-direction: column; }
-    .wa-inbox-session { align-items: flex-start; flex-wrap: wrap; }
-    .wa-qr-open { width: 100%; margin: 4px 0 0; }
     .wa-qr-modal { padding: 24px 16px 18px; }
     .wa-qr-frame { min-height: 260px; }
 }
 
 html[data-theme="light"] .wa-inbox-page { color: #181816; }
-html[data-theme="light"] .wa-inbox-hero p, html[data-theme="light"] .wa-inbox-stats span,
-html[data-theme="light"] .wa-conversation-preview, html[data-theme="light"] .wa-inbox-session small,
+html[data-theme="light"] .wa-conversation-preview,
 html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55); }
 
 @media (max-width: 900px) {
-    .wa-inbox-stats { grid-template-columns: repeat(2, minmax(0,1fr)); }
     .wa-inbox-toolbar { align-items: stretch; flex-wrap: wrap; }
     .wa-inbox-filters { order: 2; width: 100%; }
     .wa-inbox-search { flex: 1; min-width: 180px; }
@@ -10186,9 +10164,6 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
 }
 
 @media (max-width: 560px) {
-    .wa-inbox-hero { align-items: stretch; flex-direction: column; padding: 17px; }
-    .wa-inbox-session { min-width: 0; }
-    .wa-inbox-stats button { min-width: 0; padding: 12px; }
     .wa-detail-head { align-items: flex-start; flex-direction: column; }
     .wa-detail-actions { width: 100%; overflow-x: auto; }
     .wa-message { max-width: 90%; }
@@ -11763,47 +11738,10 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
     }
 }
 
-.whatsapp-reminders-hero {
-    background:
-        radial-gradient(circle at 90% 15%, rgba(37, 211, 102, 0.18), transparent 36%),
-        var(--ops-surface);
-}
 
-.whatsapp-reminder-tabs {
-    display: grid;
-    grid-template-columns: repeat(5, minmax(140px, 1fr));
-    gap: 10px;
-    margin: 18px 0;
-}
 
-.whatsapp-reminder-tabs button {
-    display: flex;
-    min-height: 74px;
-    align-items: center;
-    justify-content: center;
-    gap: 10px;
-    padding: 12px;
-    color: var(--ops-muted);
-    background: var(--ops-surface);
-    border: 1px solid var(--ops-border);
-    border-radius: 14px;
-    cursor: pointer;
-    font: inherit;
-    font-size: 0.76rem;
-    font-weight: 800;
-    text-align: left;
-}
 
-.whatsapp-reminder-tabs button span {
-    color: #25d366;
-    font-size: 1.4rem;
-}
 
-.whatsapp-reminder-tabs button.active {
-    color: var(--admin-text);
-    background: rgba(37, 211, 102, 0.1);
-    border-color: rgba(37, 211, 102, 0.55);
-}
 
 .whatsapp-custom {
     display: grid;
@@ -11879,15 +11817,7 @@ html[data-theme="light"] .wa-conversation-head time { color: rgba(24,24,22,.55);
     cursor: default;
 }
 
-.whatsapp-broadcast-worker {
-    color: var(--ops-muted);
-    font-size: 0.82rem;
-}
 
-.whatsapp-broadcast-worker.is-online {
-    color: #1f9d55;
-    font-weight: 700;
-}
 
 .whatsapp-broadcast-note {
     margin: 0;
@@ -14366,14 +14296,6 @@ textarea.whatsapp-message-preview {
 @keyframes daily-schedule-spin { to { transform: rotate(360deg); } }
 @media (max-width:1180px) { .schedule-filter-panel { grid-template-columns: repeat(3,minmax(140px,1fr)); } }
 @media (max-width:760px) {
-    .whatsapp-reminder-tabs {
-        display: flex;
-        overflow-x: auto;
-        padding-bottom: 4px;
-    }
-    .whatsapp-reminder-tabs button {
-        flex: 0 0 180px;
-    }
     .whatsapp-reminder-card {
         grid-template-columns: 38px minmax(0, 1fr);
         padding: 13px;
@@ -16325,7 +16247,6 @@ html[data-theme="light"] .sidebar-toggle {
 html[data-theme="light"] .wa-inbox-toolbar,
 html[data-theme="light"] .wa-inbox-workspace { background: var(--ops-surface, #fff); border-color: rgba(24,24,22,.1); }
 html[data-theme="light"] .wa-inbox-filters button:not(.active),
-html[data-theme="light"] .wa-inbox-refresh,
 html[data-theme="light"] .wa-detail-actions button,
 html[data-theme="light"] .wa-inbox-search input,
 html[data-theme="light"] .wa-link-panel input,

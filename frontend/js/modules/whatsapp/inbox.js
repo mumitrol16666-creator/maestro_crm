@@ -88,6 +88,12 @@ function whatsappInboxRenderStatus() {
         queue.textContent = queued ? `Ответов ждут отправки: ${queued}` : '';
     }
     const needsReply = Number(totals.needsReply || 0);
+    // Значок у пункта «WhatsApp» в меню — клиенты, которые ждут ответа (обновляется по сокету с любого экрана).
+    const badge = document.getElementById('whatsappInboxBadge');
+    if (badge) {
+        badge.textContent = needsReply > 99 ? '99+' : String(needsReply);
+        badge.style.display = needsReply ? 'inline-flex' : 'none';
+    }
     const chip = document.getElementById('waHubInboxCount');
     if (chip) {
         chip.textContent = needsReply > 99 ? '99+' : String(needsReply);
@@ -204,6 +210,10 @@ function whatsappInboxRenderDetail() {
     const item = whatsappInboxState.detail;
     if (!root || !item) return;
     const mine = item.takeoverById && item.takeoverById === getUserId();
+    // Бот в режиме наблюдения ответы не забирает: писать здесь бесполезно, сервер такой ответ отклонит.
+    const manualMode = whatsappInboxState.status?.session?.mode === 'manual';
+    const canWrite = mine && manualMode;
+    const composerHint = !mine ? 'Чтобы написать, сначала заберите диалог' : !manualMode ? 'Бот в режиме наблюдения: ответьте с телефона школы' : 'Напишите сообщение клиенту';
     const taken = item.automationStatus === 'paused';
     const linkedLabel = item.student
         ? `Ученик: ${[item.student.lastName, item.student.name].filter(Boolean).join(' ')}`
@@ -235,10 +245,10 @@ function whatsappInboxRenderDetail() {
             ${(item.messages || []).slice().reverse().map(whatsappInboxMessage).join('') || '<div class="wa-inbox-empty">Сообщений пока нет</div>'}
             ${pending.map(entry => `<article class="wa-outbox-state ${whatsappInboxEscape(entry.status)}"><strong>${entry.status === 'uncertain' ? 'Нужно проверить WhatsApp' : 'Исходящее в очереди'}</strong><span>${whatsappInboxEscape(entry.content)}</span><small>${whatsappInboxEscape(entry.status)}</small></article>`).join('')}
         </div>
-        <form class="wa-composer ${mine ? '' : 'locked'}" id="waComposer">
-            <textarea id="waComposerText" maxlength="4000" placeholder="${mine ? 'Напишите сообщение клиенту' : 'Чтобы написать, сначала заберите диалог'}" ${mine ? '' : 'disabled'}></textarea>
-            <button type="submit" ${mine ? '' : 'disabled'}>Отправить</button>
-            <small>${mine ? 'Сообщение уйдёт через подтверждаемую очередь.' : 'AI не отвечает в этом режиме.'}</small>
+        <form class="wa-composer ${canWrite ? '' : 'locked'}" id="waComposer">
+            <textarea id="waComposerText" maxlength="4000" placeholder="${whatsappInboxEscape(composerHint)}" ${canWrite ? '' : 'disabled'}></textarea>
+            <button type="submit" ${canWrite ? '' : 'disabled'}>Отправить</button>
+            <small>${canWrite ? 'Сообщение уйдёт с WhatsApp школы через бота.' : !manualMode ? 'Бот в режиме наблюдения: ответы из CRM не отправляются, отвечайте с телефона школы.' : 'AI не отвечает в этом режиме.'}</small>
         </form>`;
     requestAnimationFrame(() => {
         const stream = document.getElementById('waMessageStream');
@@ -309,11 +319,9 @@ function bindWhatsappInboxEvents() {
         if (!control || !control.closest('#whatsappInboxRoot, #waQrModal')) return;
         const action = control.dataset.waAction;
         try {
-            if (action === 'refresh') await whatsappInboxRefresh();
-            if (action === 'show-qr') await whatsappInboxOpenQr();
             if (action === 'refresh-qr') await whatsappInboxLoadQr({ notify: true });
             if (action === 'close-qr') whatsappInboxCloseQr();
-            if (action === 'filter' && control.dataset.filter !== 'queue') {
+            if (action === 'filter') {
                 whatsappInboxState.filter = control.dataset.filter;
                 whatsappInboxState.selectedId = null;
                 whatsappInboxState.detail = null;
@@ -398,3 +406,9 @@ window.openWhatsappQrFromHub = () => {
     return whatsappInboxOpenQr().catch(error => toast.error(error.message));
 };
 window.refreshWhatsappInbox = () => whatsappInboxRefresh();
+
+// Значок «ждут ответа» у пункта меню — сразу после входа, не дожидаясь открытия раздела.
+setTimeout(() => {
+    if (typeof getUserRole !== 'function' || !['admin', 'super_admin'].includes(getUserRole())) return;
+    loadWhatsappInboxStatus().then(whatsappInboxRenderStatus).catch(() => {});
+}, 1500);

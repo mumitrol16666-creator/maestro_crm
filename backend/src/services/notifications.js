@@ -38,7 +38,7 @@ function formatSectorExamScheduledMessage(classRecord, exams = [], added = false
         `${day}.${month}.${year}, ${classRecord.startTime}–${classRecord.endTime}`,
         // 07.11 (P3): exams booked from an app session carry no per-pupil title; no «— » left hanging.
         ...exams.map(exam => `• ${escapeHtml(exam.studentName || 'Ученик')}${exam.title ? ` — ${escapeHtml(exam.title)}` : ''}`),
-        'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
+        'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp», вкладка «Экзамены».',
     ].join('\n');
 }
 

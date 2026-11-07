@@ -50,7 +50,11 @@ document.addEventListener('DOMContentLoaded', () => {
     socket.on('whatsapp:message', refreshWhatsappUi);
     socket.on('whatsapp:conversation', refreshWhatsappUi);
     socket.on('whatsapp:outbox', refreshWhatsappUi);
-    socket.on('whatsapp:alert', refreshWhatsappUi);
+    socket.on('whatsapp:qr', () => window.refreshWhatsappHubStatus?.().catch(() => {}));
+    socket.on('whatsapp:alert', () => {
+        refreshWhatsappUi();
+        window.refreshWhatsappHubStatus?.().catch(error => console.warn('WhatsApp status refresh:', error));
+    });
 
     socket.on('disconnect', () => {
         console.log('🔴 Соединение Socket.IO разорвано.');

@@ -283,6 +283,10 @@ router.post('/conversations/:id/messages', async (req, res) => {
             const conversation = await tx.conversation.findUnique({ where: { id: req.params.id } });
             if (!conversation) return { error: 'not_found' };
             if (!canQueueManualMessage(conversation, req.user.id)) return { error: 'not_taken' };
+            // Воркер в режиме наблюдения ответы не забирает: такой ответ висел бы в очереди и ушёл бы
+            // спустя часы, когда режим переключат на manual.
+            const session = await tx.whatsappBrowserSession.findFirst({ orderBy: { updatedAt: 'desc' }, select: { mode: true } });
+            if (session?.mode !== 'manual') return { error: 'observer' };
             const idempotencyKey = buildOutboxIdempotencyKey({ conversationId: conversation.id, userId: req.user.id, requestKey, content });
             const outbox = await tx.whatsappOutbox.upsert({
                 where: { idempotencyKey },
@@ -302,6 +306,7 @@ router.post('/conversations/:id/messages', async (req, res) => {
         });
         if (result.error === 'not_found') return res.status(404).json({ success: false, error: 'Диалог не найден' });
         if (result.error === 'not_taken') return res.status(409).json({ success: false, error: 'Сначала заберите этот диалог вручную' });
+        if (result.error === 'observer') return res.status(409).json({ success: false, error: 'Бот WhatsApp в режиме наблюдения: ответы из CRM не отправляются. Ответьте с телефона школы' });
         req.app.get('io')?.emit('whatsapp:outbox', { conversationId: result.conversation.id, outboxId: result.outbox.id, status: result.outbox.status });
         res.status(201).json({ success: true, outbox: result.outbox });
     } catch (error) {

@@ -279,7 +279,7 @@ test('trialRefundView: кнопка только админам и только 
 });
 
 test('сообщение клиенту: с датой и без неё, без обещанного срока зачисления', () => {
-    const withDate = trialRefundMessage({ name: 'Анна', phone: '8 701 123 45 67', trialScheduledAt: '2026-11-10T10:00:00.000Z' });
+    const withDate = trialRefundMessage({ name: 'Анна', phone: '8 701 123 45 67', trialScheduledAt: '2026-11-10T10:00:00.000Z' }, 'kaspi_pay');
     assert.match(withDate.message, /^Здравствуйте, Анна! Запись на диагностический урок .*10 ноября.*15:00 отменена\./);
     assert.match(withDate.message, /2\s000 ₸ вернём на Kaspi/);
     assert.doesNotMatch(withDate.message, /дн(ей|я)|рабочих/);
@@ -299,4 +299,17 @@ test('withoutRefundDetailsForRole: причина и пометка только
         assert.deepEqual(stripped, { id: 'b', name: 'Анна' });
     }
     assert.equal(withoutRefundDetailsForRole(null, 'teacher'), null);
+});
+
+test('сообщение клиенту: формулировка возврата зависит от счёта возврата', () => {
+    const booking = { name: 'Анна', phone: '8 701 123 45 67', trialScheduledAt: null };
+    assert.match(trialRefundMessage(booking, 'kaspi_pay').message, /вернём на Kaspi/);
+    const cash = trialRefundMessage(booking, 'cash').message;
+    assert.match(cash, /вернём наличными в школе/);
+    assert.doesNotMatch(cash, /Kaspi/);
+    for (const method of ['freedom', 'halyk', null, undefined]) {
+        const neutral = trialRefundMessage(booking, method).message;
+        assert.match(neutral, /Вернём вам деньги/);
+        assert.doesNotMatch(neutral, /Kaspi|наличными/);
+    }
 });

@@ -1262,7 +1262,7 @@ router.post('/:id/trial-refund', authenticate, requireAdmin, async (req, res) =>
                 booking: { ...result.booking, _id: result.booking.id },
                 policy: result.policy,
                 classCancelled: result.classCancelled,
-                clientMessage: trialRefundMessage(result.booking),
+                clientMessage: trialRefundMessage(result.booking, result.refund.paymentMethod),
                 message: `Возврат ${amountText} ₸ оформлен`,
             } };
         });

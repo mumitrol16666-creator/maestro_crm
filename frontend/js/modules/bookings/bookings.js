@@ -34,7 +34,7 @@ function showTrialInvitation(invitation, copy = {}) {
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active trial-invitation-overlay';
-    overlay.style.zIndex = '10030';
+    overlay.style.zIndex = String(copy.zIndex || 10030);
     overlay.innerHTML = `
         <div class="modal-content trial-invitation-modal" role="dialog" aria-modal="true" aria-labelledby="trialInvitationTitle">
             <button class="modal-close" type="button" data-trial-invitation-close aria-label="Закрыть">×</button>
@@ -186,6 +186,8 @@ function openTrialRefundDialog(booking, onDone) {
     const reasonInput = overlay.querySelector('#trialRefundReason');
     const submit = overlay.querySelector('#trialRefundSubmit');
     let sending = false;
+    // Own validity flag: the global submit handler in core/api.js disables the button before this handler runs.
+    let formValid = false;
 
     const refresh = () => {
         const rule = trialRefundRule(booking.trialScheduledAt, cancelledInput.value ? new Date(cancelledInput.value) : NaN);
@@ -193,7 +195,8 @@ function openTrialRefundDialog(booking, onDone) {
         ruleLine.className = `trial-refund-rule ${rule.withinPolicy ? 'is-ok' : 'is-warning'}`;
         overrideRow.hidden = rule.withinPolicy;
         if (rule.withinPolicy) overrideBox.checked = false;
-        submit.disabled = sending || !cancelledInput.value || !reasonInput.value.trim() || (!rule.withinPolicy && !overrideBox.checked);
+        formValid = Boolean(cancelledInput.value && reasonInput.value.trim() && (rule.withinPolicy || overrideBox.checked));
+        submit.disabled = sending || !formValid;
     };
     [cancelledInput, overrideBox, reasonInput].forEach(el => el.addEventListener('input', refresh));
     overrideBox.addEventListener('change', refresh);
@@ -203,7 +206,7 @@ function openTrialRefundDialog(booking, onDone) {
     overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
     overlay.querySelector('#trialRefundForm').addEventListener('submit', async event => {
         event.preventDefault();
-        if (submit.disabled) return;
+        if (sending || !formValid) return;
         sending = true;
         submit.disabled = true;
         submit.textContent = 'Возвращаем...';
@@ -223,7 +226,7 @@ function openTrialRefundDialog(booking, onDone) {
             close();
             toast.success(result.message || 'Возврат 2 000 ₸ оформлен');
             if (typeof onDone === 'function') await onDone(result);
-            showTrialInvitation(result.clientMessage, { eyebrow: 'Оплата диагностики возвращена' });
+            showTrialInvitation(result.clientMessage, { eyebrow: 'Оплата диагностики возвращена', zIndex: 10060 });
         } catch (error) {
             toast.error(error.message);
             sending = false;
@@ -1011,7 +1014,7 @@ async function openBookingCard(bookingId) {
             openTrialRefundDialog(booking, async () => {
                 close();
                 await renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
-                openBookingCard(bookingId);
+                await openBookingCard(bookingId);
             });
         });
         overlay.querySelector('[data-booking-card-sheet-print]')?.addEventListener('click', () => {

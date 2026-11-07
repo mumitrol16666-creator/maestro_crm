@@ -92,7 +92,7 @@ function buildTrialInvitation(booking) {
  * The credit period is deliberately not promised. Without a lesson date the
  * date line is dropped.
  */
-function trialRefundMessage(booking) {
+function trialRefundMessage(booking, refundMethod = null) {
     const scheduled = booking?.trialScheduledAt ? formatTrialDateTime(booking.trialScheduledAt) : null;
     const clientName = String(booking?.name || '').trim();
     const greeting = clientName ? `Здравствуйте, ${clientName}!` : 'Здравствуйте!';
@@ -100,9 +100,16 @@ function trialRefundMessage(booking) {
     const cancelled = scheduled
         ? `Запись на диагностический урок ${scheduled.date}, ${scheduled.time} отменена.`
         : 'Запись на диагностический урок отменена.';
+    const price = `${TRIAL_LESSON_PRICE.toLocaleString('ru-RU')} ₸`;
+    // The wording follows the account the money goes back from.
+    const returnLine = ['kaspi_pay', 'kaspi'].includes(refundMethod)
+        ? `${price} вернём на Kaspi, с которого была оплата.`
+        : (refundMethod === 'cash'
+            ? `${price} вернём наличными в школе.`
+            : `Вернём вам деньги — ${price}.`);
     const message = [
         `${greeting} ${cancelled}`,
-        `${TRIAL_LESSON_PRICE.toLocaleString('ru-RU')} ₸ вернём на Kaspi, с которого была оплата.`,
+        returnLine,
         'Если захотите записаться снова, напишите нам в этот чат.',
     ].join(' ');
     return {

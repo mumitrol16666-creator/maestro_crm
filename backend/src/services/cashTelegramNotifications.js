@@ -16,7 +16,7 @@ const IGNORED_CATEGORIES = new Set([
 
 const CATEGORY_LABELS = Object.freeze({
     payment: 'Оплата обучения',
-    trial_payment: 'Диагностический урок',
+    trial_payment: 'Оплата диагностического урока',
     refund: 'Возврат',
     trial_refund: 'Возврат за диагностический урок',
     deletion: 'Удаление платежа',
@@ -26,6 +26,10 @@ const CATEGORY_LABELS = Object.freeze({
     shop_sale: 'Продажа магазина',
     shop_refund: 'Возврат магазина',
 });
+
+function cashCategoryLabel(category) {
+    return CATEGORY_LABELS[category] || category || 'Не указана';
+}
 
 const CASHBOX_ACCOUNT_SELECT = {
     type: true,
@@ -264,6 +268,7 @@ async function processPendingCashTelegramNotifications(options = {}) {
 module.exports = {
     CASH_NOTIFICATION_OPERATION,
     IGNORED_CATEGORIES,
+    cashCategoryLabel,
     createCashTransaction,
     formatCashTransactionNotification,
     processPendingCashTelegramNotifications,

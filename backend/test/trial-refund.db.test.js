@@ -84,7 +84,7 @@ if (!process.env.TEST_DATABASE_URL) {
     test.before(async () => {
         // Test database only: a crashed permission test may leave restricted role grants behind.
         await prisma.rolePermissions.deleteMany();
-        for (const role of ['admin', 'super_admin', 'sales_manager', 'teacher']) {
+        for (const role of ['admin', 'super_admin', 'sales_manager', 'teacher', 'staff']) {
             users[role] = await prisma.student.create({
                 data: { name: `Refund ${role}`, lastName: 'Test', role, phone: randomUUID(), password: 'unused' },
             });
@@ -94,6 +94,7 @@ if (!process.env.TEST_DATABASE_URL) {
         app.use('/api/bookings', require('../src/routes/bookings'));
         app.use('/api/cashbox', require('../src/routes/cashbox'));
         app.use('/api/analytics', require('../src/routes/analytics'));
+        app.use('/api/classes', require('../src/routes/classes'));
         server = app.listen(0, '127.0.0.1');
         await new Promise((resolve) => server.once('listening', resolve));
         base = `http://127.0.0.1:${server.address().port}`;
@@ -315,5 +316,66 @@ if (!process.env.TEST_DATABASE_URL) {
         const removed = await call('DELETE', `/api/bookings/${free.booking.id}?hardDelete=1`, 'admin');
         assert.equal(removed.status, 200, JSON.stringify(removed.body));
         assert.equal(await prisma.booking.findUnique({ where: { id: free.booking.id } }), null);
+    });
+
+    test('роли без доступа к причине (staff) не получают её в списке уроков и в карточке урока; учителя CRM не пускает вовсе', async () => {
+        const { booking, cls } = await makeTrial();
+        assert.equal((await call('POST', `/api/bookings/${booking.id}/trial-refund`, 'admin', {
+            reason: 'Секретная причина семьи', overridePolicy: true,
+        })).status, 201);
+
+        const range = `start=${new Date(Date.now() - 400 * 24 * HOUR).toISOString()}&end=${new Date(Date.now() + 400 * 24 * HOUR).toISOString()}`;
+        const findIn = (body) => (body.classes || []).find((c) => (c.id || c._id) === cls.id);
+
+        // Учитель и ученик до этих маршрутов не доходят: authenticate отвечает 403.
+        assert.equal((await call('GET', `/api/classes/${cls.id}`, 'teacher')).status, 403);
+        const teacherList = await call('GET', `/api/classes?${range}`, 'staff');
+        assert.equal(teacherList.status, 200, JSON.stringify(teacherList.body).slice(0, 300));
+        const teacherRow = findIn(teacherList.body);
+        assert.ok(teacherRow, 'урок виден учителю');
+        assert.equal(JSON.stringify(teacherList.body).includes('Секретная причина семьи'), false);
+        assert.equal('trialRefundReason' in teacherRow.trialBooking, false);
+        assert.equal('trialRefundOutsidePolicy' in teacherRow.trialBooking, false);
+        assert.equal(teacherRow.trialRefund.reason, null);
+
+        const teacherOne = await call('GET', `/api/classes/${cls.id}`, 'staff');
+        assert.equal(teacherOne.status, 200);
+        assert.equal(JSON.stringify(teacherOne.body).includes('Секретная причина семьи'), false);
+        assert.equal('trialRefundReason' in teacherOne.body.class.trialBooking, false);
+        assert.equal(teacherOne.body.class.trialRefund.reason, null);
+        assert.equal(teacherOne.body.class.trialRefund.outsidePolicy, null);
+
+        // Администратор и менеджер продаж видят причину.
+        const adminOne = await call('GET', `/api/classes/${cls.id}`, 'admin');
+        assert.equal(adminOne.body.class.trialRefund.reason, 'Секретная причина семьи');
+        assert.equal(adminOne.body.class.trialBooking.trialRefundReason, 'Секретная причина семьи');
+    });
+
+    test('вечерняя сводка: возврат диагностики в расходах с подписью, оплата с подписью, итог сходится с кассой', async () => {
+        const { buildEveningReportStats } = require('../src/services/notifications');
+        const moment = new Date('2031-03-10T09:00:00.000Z');
+        const income = await prisma.cashTransaction.create({
+            data: {
+                type: 'income', amount: 2000, category: 'trial_payment', description: 'Тест сводки',
+                createdById: users.admin.id, paymentMethod: 'cash', date: moment,
+            },
+        });
+        await prisma.cashTransaction.create({
+            data: {
+                type: 'expense', amount: 2000, category: 'trial_refund', description: 'Тест сводки',
+                createdById: users.admin.id, paymentMethod: 'cash', date: moment, refundOfCashTransactionId: income.id,
+            },
+        });
+        const stats = await buildEveningReportStats(moment);
+        assert.equal(stats.finance.expensesByCategory['Возврат за диагностический урок'], 2000);
+        assert.equal(stats.finance.otherIncomeByCategory['Оплата диагностического урока'], 2000);
+        assert.equal(stats.finance.expensesByCategory.trial_refund, undefined);
+        assert.equal(stats.finance.otherIncomeByCategory.trial_payment, undefined);
+        assert.equal(stats.finance.expenses, 2000, 'возврат учтён в расходах дня');
+        assert.equal(stats.finance.otherIncome, 2000);
+
+        const response = await call('GET', '/api/cashbox/summary?from=2031-03-10&to=2031-03-10', 'admin');
+        assert.equal(response.body.summary.cashTotal, 0);
+        assert.equal(response.body.summary.trialRefundsTotal, 2000);
     });
 }

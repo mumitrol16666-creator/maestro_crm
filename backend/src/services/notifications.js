@@ -15,6 +15,7 @@ const {
     markDailyReportTelegramResult,
     persistDailyReportSnapshot,
 } = require('./dailyReportArchive');
+const { cashCategoryLabel } = require('./cashTelegramNotifications');
 const { syncLessonApprovedToLearningPlatform } = require('./learningPlatformNotifications');
 const {
     isAnalyticsExcludedCashCategory,
@@ -666,9 +667,9 @@ async function buildEveningReportStats(now = new Date()) {
             revenueByMethod: groupAmountBy(paymentsToday, payment => payment.paymentMethod || 'Не указан'),
             educationCashboxRevenue: sumAmounts(paymentCashTransactions, effectiveCashAmount),
             otherIncome: sumAmounts(manualIncome, effectiveCashAmount),
-            otherIncomeByCategory: groupAmountBy(manualIncome, tx => tx.category, effectiveCashAmount),
+            otherIncomeByCategory: groupAmountBy(manualIncome, tx => (tx.category ? cashCategoryLabel(tx.category) : null), effectiveCashAmount),
             expenses: sumAmounts(realExpenses, effectiveCashAmount),
-            expensesByCategory: groupAmountBy(realExpenses, tx => tx.category, effectiveCashAmount),
+            expensesByCategory: groupAmountBy(realExpenses, tx => (tx.category ? cashCategoryLabel(tx.category) : null), effectiveCashAmount),
             cashBalance,
             shopCashBalance
         },

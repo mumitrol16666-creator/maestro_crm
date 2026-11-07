@@ -41,7 +41,7 @@ const {
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
-const { trialRefundView } = require('../services/trialRefund');
+const { trialRefundView, withoutRefundDetailsForRole } = require('../services/trialRefund');
 const { buildTrialSheetForClass, TrialSheetError } = require('../services/trialSheet');
 const { defaultTrialNextAction, trialNextActionAfterHeld, stageIsPastHeld } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
@@ -951,7 +951,7 @@ router.get('/', authenticate, async (req, res) => {
                 ...trialRefundView(trialBooking, trialBooking?.cashTransactions?.[0], req.user?.role),
                 trialBooking: trialBooking
                     ? {
-                        ...trialBooking,
+                        ...withoutRefundDetailsForRole(trialBooking, req.user?.role),
                         _id: trialBooking.id,
                     }
                     : null,
@@ -1694,7 +1694,7 @@ router.get('/:id', authenticate, async (req, res) => {
                 student: attendee.studentId,
                 studentDetails: attendee.student ? { ...attendee.student, _id: attendee.student.id } : null
             })),
-            trialBooking: trialBooking ? { ...trialBooking, _id: trialBooking.id } : null,
+            trialBooking: trialBooking ? { ...withoutRefundDetailsForRole(trialBooking, req.user?.role), _id: trialBooking.id } : null,
             depositPaid: Boolean(trialBooking?.depositPaid),
             trialPaymentMethod: trialBooking?.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: trialBooking?.cashTransactions?.[0]?.date || null,

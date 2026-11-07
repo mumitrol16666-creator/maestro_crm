@@ -6,6 +6,7 @@ const {
     classifyTrialRefund,
     refundTrialPayment,
     trialRefundView,
+    withoutRefundDetailsForRole,
 } = require('../src/services/trialRefund');
 const { trialRefundMessage } = require('../src/services/trialInvitation');
 
@@ -286,4 +287,16 @@ test('сообщение клиенту: с датой и без неё, без 
     const noDate = trialRefundMessage({ name: '', phone: '', trialScheduledAt: null });
     assert.match(noDate.message, /^Здравствуйте! Запись на диагностический урок отменена\./);
     assert.equal(noDate.whatsappUrl, '');
+});
+
+test('withoutRefundDetailsForRole: причина и пометка только для admin, super_admin, sales_manager', () => {
+    const booking = { id: 'b', name: 'Анна', trialRefundReason: 'Причина', trialRefundOutsidePolicy: true };
+    for (const role of ['admin', 'super_admin', 'sales_manager']) {
+        assert.equal(withoutRefundDetailsForRole(booking, role), booking);
+    }
+    for (const role of ['teacher', 'student', undefined]) {
+        const stripped = withoutRefundDetailsForRole(booking, role);
+        assert.deepEqual(stripped, { id: 'b', name: 'Анна' });
+    }
+    assert.equal(withoutRefundDetailsForRole(null, 'teacher'), null);
 });

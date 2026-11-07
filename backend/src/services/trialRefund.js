@@ -211,15 +211,26 @@ function trialRefundView(booking, income, role) {
                 date: refundedBy.date,
                 paymentMethod: refundedBy.paymentMethod || null,
                 reason: REFUND_REASON_VIEW_ROLES.has(role) ? (booking?.trialRefundReason || null) : null,
-                outsidePolicy: Boolean(booking?.trialRefundOutsidePolicy),
+                outsidePolicy: REFUND_REASON_VIEW_ROLES.has(role) ? Boolean(booking?.trialRefundOutsidePolicy) : null,
             }
             : null,
         trialRefundAvailable: Boolean(income && !refundedBy && REFUND_ROLES.has(role)),
     };
 }
 
+/**
+ * The lesson endpoints are open to teachers: the refund reason and the
+ * outside-policy mark belong to admin, super_admin and sales_manager only.
+ */
+function withoutRefundDetailsForRole(trialBooking, role) {
+    if (!trialBooking || REFUND_REASON_VIEW_ROLES.has(role)) return trialBooking;
+    const { trialRefundReason, trialRefundOutsidePolicy, ...rest } = trialBooking;
+    return rest;
+}
+
 module.exports = {
     TRIAL_REFUND_POLICY_HOURS,
+    withoutRefundDetailsForRole,
     classifyTrialRefund,
     refundTrialPayment,
     trialRefundView,

@@ -49,15 +49,57 @@ async function linkMarketingEvents(bookingId, marketingClientId, createdAt) {
     }).catch((error) => console.error('[marketing] integration booking link error:', error));
 }
 
+const APP_REGISTRATION_REQUEST_TYPE = 'app_registration';
+const APP_REGISTRATION_SOURCE = 'Приложение — регистрация';
+const APP_REGISTRATION_DIRECTION = 'Курсы в приложении';
+
+// Registration in the learning app is only a lead: it never creates a CRM
+// student, membership or money record and never touches userLink.syncFromApp.
+function resolveRequestType(value) {
+    if (value === 'trial') return 'trial';
+    if (value === APP_REGISTRATION_REQUEST_TYPE) return APP_REGISTRATION_REQUEST_TYPE;
+    return 'online_lesson';
+}
+
+const REQUEST_SOURCES = {
+    trial: 'Приложение — пробный урок',
+    online_lesson: 'Приложение — онлайн-урок',
+    [APP_REGISTRATION_REQUEST_TYPE]: APP_REGISTRATION_SOURCE,
+};
+
+const REQUEST_TYPE_LABELS = {
+    trial: 'пробный урок',
+    online_lesson: 'онлайн-урок',
+    [APP_REGISTRATION_REQUEST_TYPE]: 'регистрация в приложении',
+};
+
+function buildNotes(requestType, input) {
+    if (requestType === APP_REGISTRATION_REQUEST_TYPE) {
+        const comment = String(input.comment || '').trim().slice(0, 1000);
+        return [
+            `Тип заявки: ${REQUEST_TYPE_LABELS[requestType]}`,
+            comment ? `Комментарий: ${comment}` : null,
+        ].filter(Boolean).join('\n');
+    }
+    return [
+        `Тип заявки: ${REQUEST_TYPE_LABELS[requestType]}`,
+        `Уровень: ${String(input.level || 'не указан').trim()}`,
+        `Удобное время: ${String(input.preferredTime || 'не указано').trim()}`,
+        input.comment ? `Комментарий ученика: ${String(input.comment).trim()}` : null,
+    ].filter(Boolean).join('\n');
+}
+
 async function createAppOnlineLessonBooking(input) {
-    const requestType = input.requestType === 'trial' ? 'trial' : 'online_lesson';
+    const requestType = resolveRequestType(input.requestType);
     const externalSourceId = String(input.externalSourceId || '').trim();
     const name = String(input.name || '').trim();
     const lastName = String(input.lastName || '').trim();
     const middleName = String(input.middleName || '').trim();
     const parsedDateOfBirth = parseOptionalDate(input.dateOfBirth);
     const phone = String(input.phone || '').trim();
-    const direction = String(input.direction || '').trim();
+    const direction = requestType === APP_REGISTRATION_REQUEST_TYPE
+        ? APP_REGISTRATION_DIRECTION
+        : String(input.direction || '').trim();
     const marketingClientId = cleanMarketingValue(input.marketingClientId, 120);
     const marketingSessionId = cleanMarketingValue(input.marketingSessionId, 120);
     const attribution = normalizeMarketingAttribution(input.attribution);
@@ -92,12 +134,7 @@ async function createAppOnlineLessonBooking(input) {
         };
     }
 
-    const notes = [
-        `Тип заявки: ${requestType === 'trial' ? 'пробный урок' : 'онлайн-урок'}`,
-        `Уровень: ${String(input.level || 'не указан').trim()}`,
-        `Удобное время: ${String(input.preferredTime || 'не указано').trim()}`,
-        input.comment ? `Комментарий ученика: ${String(input.comment).trim()}` : null,
-    ].filter(Boolean).join('\n');
+    const notes = buildNotes(requestType, input);
 
     const booking = await prisma.booking.create({
         data: {
@@ -110,7 +147,7 @@ async function createAppOnlineLessonBooking(input) {
             phone,
             phoneDigits: phoneDigits(phone),
             direction,
-            source: requestType === 'trial' ? 'Приложение — пробный урок' : 'Приложение — онлайн-урок',
+            source: REQUEST_SOURCES[requestType],
             attribution: attribution || undefined,
             marketingClientId,
             marketingSessionId,
@@ -136,4 +173,4 @@ async function createAppOnlineLessonBooking(input) {
     };
 }
 
-module.exports = { createAppOnlineLessonBooking };
+module.exports = { createAppOnlineLessonBooking, resolveRequestType };

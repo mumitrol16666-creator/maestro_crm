@@ -37,7 +37,7 @@ function formatSectorExamScheduledMessage(classRecord, exams = [], added = false
         escapeHtml(classRecord.title),
         `${day}.${month}.${year}, ${classRecord.startTime}–${classRecord.endTime}`,
         ...exams.map(exam => `• ${escapeHtml(exam.studentName || 'Ученик')} — ${escapeHtml(exam.title || '')}`),
-        'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp-напоминания».',
+        'Бесплатный урок. Ученикам, родителям и преподавателю придёт уведомление в приложении; сообщения WhatsApp — в разделе «WhatsApp», вкладка «Экзамены».',
     ].join('\n');
 }
 

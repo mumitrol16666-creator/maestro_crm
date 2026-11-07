@@ -309,21 +309,30 @@ function whatsappReminderCard(kind, item) {
 }
 
 
-// Одна строка состояния бота WhatsApp для всего раздела: выключен, сломан, вышел из аккаунта или готов.
+// Одна строка состояния бота WhatsApp для всего раздела. «Подключён» — только по тому же правилу,
+// по которому CRM отдаёт воркеру сообщения: свежий сигнал и статус connected.
 function whatsappWorkerStatus() {
     const worker = whatsappBroadcastData?.worker;
     if (!worker) return null;
-    const lastSeen = worker.lastHeartbeatAt ? ` (последний раз в ${whatsappBroadcastTime(worker.lastHeartbeatAt)})` : '';
-    if (worker.online && !worker.broadcastEnabled) {
-        return { tone: 'warn', text: 'Бот WhatsApp подключён, но рассылка в нём выключена: сообщения встанут в очередь и будут ждать' };
+    if (worker.connected) {
+        const replies = worker.mode === 'manual'
+            ? 'ответы из «Переписки» уходят'
+            : 'ответы из «Переписки» не отправляются (режим наблюдения)';
+        const broadcast = worker.broadcastEnabled ? 'рассылка работает' : 'рассылка в нём выключена, сообщения будут ждать';
+        return { tone: worker.broadcastEnabled ? 'ok' : 'warn', text: `Бот WhatsApp подключён: ${broadcast}; ${replies}` };
     }
-    if (worker.online) return { tone: 'ok', text: 'Бот WhatsApp подключён: входящие приходят, рассылка пойдёт сразу' };
+    if (worker.sending) return { tone: 'ok', text: 'Бот WhatsApp отправляет сообщение рассылки' };
     if (worker.alive && worker.status === 'qr_required') {
         return { tone: 'warn', qr: true, text: 'Бот WhatsApp вышел из аккаунта: отсканируйте QR. До этого входящих и рассылки нет' };
     }
     if (worker.alive && worker.status === 'degraded') {
-        return { tone: 'bad', text: 'Бот WhatsApp запущен, но WhatsApp в нём не открывается: входящих и рассылки нет, пока его не перезапустить' };
+        const reason = worker.stoppedReason ? ` Ошибка: ${worker.stoppedReason}` : '';
+        return { tone: 'bad', text: `Бот WhatsApp запущен, но WhatsApp в нём не открывается: входящих и рассылки нет, пока его не перезапустить.${reason}` };
     }
+    if (worker.alive && worker.status === 'starting') {
+        return { tone: 'warn', text: 'Бот WhatsApp запускается. Если это держится дольше пары минут, перезапустите его на компьютере школы' };
+    }
+    const lastSeen = worker.lastHeartbeatAt ? ` (последний раз в ${whatsappBroadcastTime(worker.lastHeartbeatAt)})` : '';
     return { tone: 'bad', text: `Бот WhatsApp выключен${lastSeen}: входящих и рассылки нет, пока его не запустить на компьютере школы` };
 }
 
@@ -341,26 +350,28 @@ function whatsappReminderPanels() {
 
 function renderWhatsappReminderContent() {
     const root = document.getElementById('whatsappRemindersRoot');
-    if (!root || !whatsappReminderData) return;
+    if (!root) return;
+    // Если очереди не загрузились, шапка и «Переписка» всё равно доступны: ошибка — только во вкладках очередей.
+    const queuesFailed = !whatsappReminderData;
     const labels = {
         inbox: 'Переписка',
         today: 'Сегодня урок',
         tomorrow: 'Завтра урок',
         homework: 'После урока',
         oneLesson: 'Низкий баланс',
-        tasks: 'Контакты по плану',
+        tasks: 'Запланированные контакты',
         exam: 'Экзамены',
         custom: 'Своя рассылка',
     };
     const isInbox = whatsappReminderFilter === 'inbox';
-    const items = isInbox ? [] : (whatsappReminderData[whatsappReminderFilter] || []);
+    const items = isInbox || queuesFailed ? [] : (whatsappReminderData[whatsappReminderFilter] || []);
     const isCustom = whatsappReminderFilter === 'custom';
     const inboxCount = Number(window.whatsappInboxNeedsReply?.() || 0);
     const count = key => key === 'inbox'
         ? `<span class="wa-hub-count${inboxCount ? ' is-hot' : ''}" id="waHubInboxCount">${inboxCount > 99 ? '99+' : inboxCount}</span>`
         : key === 'custom'
             ? '<span class="wa-hub-count" aria-hidden="true">✎</span>'
-            : `<span class="wa-hub-count">${whatsappReminderData.counts?.[key] || 0}</span>`;
+            : `<span class="wa-hub-count">${queuesFailed ? '—' : (whatsappReminderData.counts?.[key] || 0)}</span>`;
     root.innerHTML = `
         <header class="wa-hub-head">
             ${whatsappWorkerStatusHtml()}
@@ -373,8 +384,9 @@ function renderWhatsappReminderContent() {
                 </button>
             `).join('')}
         </nav>
-        ${isInbox ? '' : isCustom ? whatsappCustomComposer() : whatsappBroadcastPanel(whatsappReminderFilter, items)}
-        ${isInbox || isCustom ? '' : `<div class="whatsapp-reminder-list">
+        ${!isInbox && queuesFailed && !isCustom ? '<div class="ops-empty is-error">Не удалось загрузить напоминания. Нажмите «Обновить».</div>' : ''}
+        ${isInbox || (queuesFailed && !isCustom) ? '' : isCustom ? whatsappCustomComposer() : whatsappBroadcastPanel(whatsappReminderFilter, items)}
+        ${isInbox || isCustom || queuesFailed ? '' : `<div class="whatsapp-reminder-list">
             ${items.length
                 ? items.map(item => whatsappReminderCard(whatsappReminderFilter, item)).join('')
                 : '<div class="ops-empty">В этой очереди сейчас никого нет</div>'}
@@ -758,8 +770,7 @@ async function renderWhatsappReminders(force = false) {
             whatsappReminderData = result;
             updateWhatsappRemindersBadge(result.counts?.total || 0);
         } catch (error) {
-            root.innerHTML = '<div class="ops-empty is-error">Не удалось загрузить напоминания. Обновите страницу.</div>';
-            return;
+            whatsappReminderData = null;
         }
     }
     await Promise.all([
@@ -822,6 +833,21 @@ async function updateWhatsappRemindersBadge(value) {
 window.renderWhatsappReminders = renderWhatsappReminders;
 window.setWhatsappReminderFilter = setWhatsappReminderFilter;
 window.whatsappReminderOpenInbox = () => { whatsappReminderFilter = 'inbox'; };
+
+// Сокет сообщает о QR, сбое или остановке бота: шапка раздела обновляется сразу, а не через 30 с.
+window.refreshWhatsappHubStatus = async () => {
+    await loadWhatsappBroadcasts();
+    if (!document.activeElement?.matches?.('#whatsappRemindersRoot textarea, #whatsappRemindersRoot input')) {
+        renderWhatsappReminderContent();
+    }
+};
+
+// Раздел кешируется (sections.js) и при возврате не перерисовывается: опрос состояния запускаем заново.
+window.addEventListener('admin:section-shown', event => {
+    if (event.detail?.sectionId === 'whatsapp-reminders' && whatsappBroadcastData) {
+        window.refreshWhatsappHubStatus().catch(() => {});
+    }
+});
 window.openWhatsappReminder = openWhatsappReminder;
 window.copyWhatsappReminder = copyWhatsappReminder;
 window.markWhatsappReminderSent = markWhatsappReminderSent;

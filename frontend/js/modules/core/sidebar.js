@@ -4,7 +4,7 @@
 
 const SIDEBAR_NAV_GROUPS = [
     { title: 'Работа', sections: ['dashboard', 'schedule', 'lesson-review'] },
-    { title: 'Школа', sections: ['bookings', 'students', 'groups', 'whatsapp-inbox', 'whatsapp-reminders'] },
+    { title: 'Школа', sections: ['bookings', 'students', 'groups', 'whatsapp-reminders'] },
     { title: 'Финансы', sections: ['membership-actions', 'cashbox', 'shop', 'salary'] },
     { title: 'Управление', sections: ['analytics', 'users', 'directions', 'student-history', 'activity-logs'] },
 ];
@@ -106,7 +106,6 @@ async function applySidebarVisibility() {
             membership_actions: document.querySelector('.sidebar-link[data-section="membership-actions"]'),
             shop: document.querySelector('.sidebar-link[data-section="shop"]'),
             whatsapp_reminders: document.querySelector('.sidebar-link[data-section="whatsapp-reminders"]'),
-            whatsapp_inbox: document.querySelector('.sidebar-link[data-section="whatsapp-inbox"]'),
             groups: document.querySelector('.sidebar-link[data-section="groups"]'),
             memberships: document.querySelector('.sidebar-link[data-section="memberships"]'),
             schedule: document.querySelector('.sidebar-link[data-section="schedule"]'),
@@ -135,8 +134,7 @@ async function applySidebarVisibility() {
             salary: true,
             membership_actions: true,
             shop: true,
-            whatsapp_reminders: true,
-            whatsapp_inbox: true
+            whatsapp_reminders: true
         };
 
         Object.keys(sectionLinks).forEach(section => {
@@ -231,11 +229,6 @@ function initUserManagementFallback() {
     const whatsappRemindersLink = document.querySelector('.sidebar-link[data-section="whatsapp-reminders"]');
     if (whatsappRemindersLink) {
         whatsappRemindersLink.style.display = ['admin', 'super_admin'].includes(userRole) ? 'flex' : 'none';
-    }
-
-    const whatsappInboxLink = document.querySelector('.sidebar-link[data-section="whatsapp-inbox"]');
-    if (whatsappInboxLink) {
-        whatsappInboxLink.style.display = ['admin', 'super_admin'].includes(userRole) ? 'flex' : 'none';
     }
 
     const shopLink = document.getElementById('shopLink');

@@ -388,6 +388,12 @@ async function broadcastOverview(db, { now = new Date() } = {}) {
         worker: {
             online,
             alive: fresh,
+            // Строгое «на связи», как у claim: свежий сигнал и статус connected. online выше — мягче,
+            // он нужен только чтобы не пугать «пропал» во время отправки.
+            connected: fresh && session?.status === 'connected',
+            sending: Boolean(claimedNow),
+            mode: session?.mode || null,
+            stoppedReason: session?.status === 'degraded' ? String(session.stoppedReason || '').slice(0, 200) : null,
             status: session?.status || 'stopped',
             broadcastEnabled: session?.metadata?.broadcast === true,
             lastHeartbeatAt: session?.lastHeartbeatAt || null,

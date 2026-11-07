@@ -249,7 +249,7 @@ deploy_learning_platform() {
   cat > .env.local <<EOF
 NEXT_PUBLIC_API_URL=/api/v1
 NEXT_PUBLIC_CRM_API_URL=https://${CRM_DOMAIN}
-NEXT_PUBLIC_TRIAL_LANDING_URL=https://${CRM_DOMAIN}/trial.html
+NEXT_PUBLIC_TRIAL_LANDING_URL="https://maestro.com.kz/?utm_source=app#zapis"
 NEXT_PUBLIC_RELEASE_SHA=${LP_RELEASE_SHA}
 NEXT_PUBLIC_RELEASE_BUILT_AT=${LP_RELEASE_BUILT_AT}
 EOF

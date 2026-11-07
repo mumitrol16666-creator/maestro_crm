@@ -134,7 +134,10 @@ async function loadTrialAnalyticsForPeriod(from, to) {
             attribution: true,
             cashTransactions: {
                 where: { category: 'trial_payment', type: 'income' },
-                select: { type: true, category: true, amount: true, paymentMethod: true, date: true },
+                select: {
+                    type: true, category: true, amount: true, paymentMethod: true, date: true,
+                    refundedBy: { select: { id: true } },
+                },
             },
         },
         orderBy: { createdAt: 'asc' },
@@ -739,8 +742,21 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             _sum: { amount: true },
             _count: { _all: true },
         });
-        const trialRevenue = Number(trialRevenueSummary._sum.amount || 0);
+        // Кассовый принцип (документ 26): возврат уменьшает тот период, в котором его провели.
+        const trialRefundSummary = await prisma.cashTransaction.aggregate({
+            where: {
+                type: 'expense',
+                category: 'trial_refund',
+                date: { gte: from, lte: to },
+            },
+            _sum: { amount: true },
+            _count: { _all: true },
+        });
+        const trialRevenueGross = Number(trialRevenueSummary._sum.amount || 0);
         const trialRevenueCount = Number(trialRevenueSummary._count._all || 0);
+        const trialRefunds = Number(trialRefundSummary._sum.amount || 0);
+        const trialRefundsCount = Number(trialRefundSummary._count._all || 0);
+        const trialRevenue = trialRevenueGross - trialRefunds;
 
         const trialPayments = trialStudentIdsInPeriod.length
             ? await prisma.payment.findMany({
@@ -1062,7 +1078,10 @@ router.get('/overview', authenticate, requireAdmin, async (req, res) => {
             period_metrics: {
                 newTrialsInPeriod,
                 trialRevenue,
+                trialRevenueGross,
                 trialRevenueCount,
+                trialRefunds,
+                trialRefundsCount,
                 trialToMembershipConversion,
                 trialFunnel,
                 // Когорта заявок на пробный — отдельная сквозная воронка.

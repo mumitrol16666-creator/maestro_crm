@@ -24,6 +24,7 @@ const CASHBOX_CATEGORY_LABELS = {
     cash_reconciliation_school: 'Сверка остатка школы',
     cash_reconciliation_shop: 'Сверка остатка магазина',
     refund: 'Возврат средств',
+    trial_refund: 'Возврат за диагностический урок',
     shop_sale: 'Розничная продажа',
     shop_refund: 'Отмена розничной продажи',
     shop_purchase: 'Закупка товара',
@@ -238,6 +239,7 @@ async function renderCashbox(forceReload = false) {
                 <div style="opacity:0.65; font-size:0.85rem;">Платежи фактические</div>
                 <div style="font-size:1.25rem; font-weight:600; margin-top:4px;">${cashboxFmtMoney(s.paymentsTotal)}</div>
                 <small style="opacity:0.5;">включая диагностику: ${cashboxFmtMoney(s.trialPaymentsTotal || 0)} (${s.trialPaymentsCount || 0})</small>
+                ${s.trialRefundsCount ? `<small style="opacity:0.5; display:block;">возвраты диагностики: ${cashboxFmtMoney(s.trialRefundsTotal || 0)} (${s.trialRefundsCount})</small>` : ''}
             </div>
             <div style="padding:14px; background:rgba(88,216,149,0.08); border-radius:8px;">
                 <div style="opacity:0.65; font-size:0.85rem;">Продажи магазина</div>
@@ -308,8 +310,8 @@ async function renderCashbox(forceReload = false) {
                 if (tx.relatedPayment.teacher) {
                     teacherName = cashboxPersonName(tx.relatedPayment.teacher);
                 }
-            } else if (tx.relatedBooking) {
-                studentName = cashboxPersonName(tx.relatedBooking, 'Клиент заявки');
+            } else if (tx.relatedBooking || tx.refundOf?.relatedBooking) {
+                studentName = cashboxPersonName(tx.relatedBooking || tx.refundOf.relatedBooking, 'Клиент заявки');
             } else if (tx.relatedShopSale) {
                 studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
             } else if (tx.category === 'salary') {
@@ -325,6 +327,7 @@ async function renderCashbox(forceReload = false) {
                 if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
                 if (['cash_reconciliation_school', 'cash_reconciliation_shop'].includes(tx.category)) return '<span style="color:#68d7cd; font-weight:600;">Сверка остатка</span>';
                 if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+                if (tx.category === 'trial_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат (диагностика)</span>';
                 if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
                 if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
                 if (tx.category === 'shop_purchase') return '<span style="color:#74b7f2; font-weight:600;">Закупка магазина</span>';
@@ -430,8 +433,8 @@ function cashboxViewTransactionDetails(txId) {
         if (tx.relatedPayment.teacher) {
             teacherName = cashboxPersonName(tx.relatedPayment.teacher);
         }
-    } else if (tx.relatedBooking) {
-        studentName = cashboxPersonName(tx.relatedBooking, 'Клиент заявки');
+    } else if (tx.relatedBooking || tx.refundOf?.relatedBooking) {
+        studentName = cashboxPersonName(tx.relatedBooking || tx.refundOf.relatedBooking, 'Клиент заявки');
     } else if (tx.relatedShopSale) {
         studentName = tx.relatedShopSale.customerName || 'Покупатель магазина';
     } else if (tx.category === 'salary') {
@@ -447,6 +450,7 @@ function cashboxViewTransactionDetails(txId) {
         if (['correction', 'balance_adjustment'].includes(tx.category)) return '<span style="color:#e9b95c; font-weight:600;">Тех. корректировка</span>';
         if (['cash_reconciliation_school', 'cash_reconciliation_shop'].includes(tx.category)) return '<span style="color:#68d7cd; font-weight:600;">Сверка остатка</span>';
         if (tx.category === 'refund') return '<span style="color:#dc3545; font-weight:600;">Возврат</span>';
+        if (tx.category === 'trial_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат (диагностика)</span>';
         if (tx.category === 'shop_sale') return '<span style="color:#58d895; font-weight:600;">Продажа магазина</span>';
         if (tx.category === 'shop_refund') return '<span style="color:#dc3545; font-weight:600;">Возврат магазина</span>';
         if (tx.category === 'shop_purchase') return '<span style="color:#74b7f2; font-weight:600;">Закупка магазина</span>';
@@ -705,7 +709,7 @@ function cashboxRenderCharts(transactions) {
         'shop_account_transfer_out',
     ].includes(tx.category);
     const incomes = transactions.filter(tx => tx.type === 'income' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx));
-    const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx) && tx.category !== 'refund');
+    const expenses = transactions.filter(tx => tx.type === 'expense' && !isTechnicalCorrection(tx) && !isAccountTransfer(tx) && !['refund', 'trial_refund'].includes(tx.category));
 
     const incomeByCategory = {};
     let totalIncome = 0;

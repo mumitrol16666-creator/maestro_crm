@@ -150,3 +150,23 @@ test('закрытая заявка после проведённого урок
         noShow: false,
     });
 });
+
+test('возвращённая оплата диагностики не считается оплаченной и попадает в диагностику «возвращена»', () => {
+    const stats = buildTrialAnalytics([
+        {
+            id: 'paid', requestType: 'trial', status: 'trial', source: 'instagram',
+            cashTransactions: [{ type: 'income', category: 'trial_payment', amount: 2000, refundedBy: null }],
+        },
+        {
+            id: 'refunded', requestType: 'trial', status: 'rejected', source: 'instagram',
+            cashTransactions: [{ type: 'income', category: 'trial_payment', amount: 2000, refundedBy: { id: 'refund-1' } }],
+        },
+    ]);
+    const row = stats.sources.find((item) => item.source === 'instagram');
+    assert.equal(row.leads, 2);
+    assert.equal(row.diagnosticPaid, 1);
+    assert.equal(row.diagnosticRevenue, 2000);
+    assert.equal(row.diagnosticRefunded, 1);
+    assert.equal(stats.counts.rejected, 1);
+    assert.equal(stats.counts.cancelled, 0);
+});

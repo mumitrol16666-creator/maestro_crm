@@ -1118,6 +1118,7 @@ async function fetchCalendarClasses(info, successCallback, failureCallback) {
                     teacherPenaltyReason: cls.teacherPenaltyReason || '',
                     trialReport: cls.trialReport || null,
                     depositPaid: Boolean(cls.depositPaid),
+                    trialRefund: cls.trialRefund || null,
                     trialBooking: cls.trialBooking || null,
                     individualStudentName: cls.individualStudent ? formatSchedulePersonName(cls.individualStudent) : null,
                     individualStudentShortName: cls.individualStudent ? formatScheduleShortPersonName(cls.individualStudent) : null,
@@ -1206,6 +1207,7 @@ function classDataFromCalendarEvent(event) {
         teacherPenaltyReason: event.extendedProps.teacherPenaltyReason || '',
         trialReport: event.extendedProps.trialReport || null,
         depositPaid: Boolean(event.extendedProps.depositPaid),
+        trialRefund: event.extendedProps.trialRefund || null,
         trialBooking: event.extendedProps.trialBooking || null,
         noOneAttended: event.extendedProps.noOneAttended,
         notes: event.extendedProps.notes,
@@ -2072,7 +2074,21 @@ function refreshAttendanceModalHeader(classData) {
                 Урок закрыт. Дату, время, зал и преподавателя нельзя поменять обычным сохранением.
            </div>`
         : '';
-    const trialPaymentControl = classData.classType === 'trial'
+    const trialRefundedDate = classData.trialRefund?.date
+        ? new Date(classData.trialRefund.date).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' })
+        : '';
+    const trialBookingId = classData.trialBooking?.id || classData.trialBooking?._id || '';
+    const trialPaymentControl = classData.classType === 'trial' && classData.trialRefund
+        ? `
+                <span style="opacity: 0.7;">Оплата пробного:</span>
+                <span id="trialRefundedNotice" style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px 10px;border:1px solid rgba(245,158,11,.35);border-radius:8px;background:rgba(245,158,11,.1);color:#fbbf24;width:max-content;max-width:100%;">
+                    Оплата возвращена ${trialRefundedDate}
+                    ${trialBookingId && typeof openBookingCard === 'function'
+                        ? `<button type="button" class="table-btn" style="min-height:44px;" onclick="openBookingCard(${JSON.stringify(String(trialBookingId)).replace(/"/g, '&quot;')})">Открыть заявку</button>`
+                        : ''}
+                </span>
+            `
+        : classData.classType === 'trial'
         ? `
                 <span style="opacity: 0.7;">Оплата пробного:</span>
                 <label style="display:flex;align-items:center;gap:10px;padding:8px 10px;border:1px solid rgba(255,255,255,.12);border-radius:8px;background:rgba(255,255,255,.035);width:max-content;max-width:100%;">
@@ -5989,7 +6005,7 @@ async function approveClass() {
                 return;
             }
         }
-        const trialPaymentMissing = isTrialLesson && !approvalDraft.depositPaid;
+        const trialPaymentMissing = isTrialLesson && !approvalDraft.depositPaid && !freshClass.trialRefund;
         const confirmText = trialPaymentMissing
             ? 'Диагностический урок не отмечен как оплаченный. Подтвердить урок без оплаты?'
             : freshClass.teacherOutcomeHint === 'not_held'

@@ -878,6 +878,8 @@ model CashTransaction {
   relatedShopSaleId String?
   relatedBookingId  String?         @unique
   accountTransferId String?
+  // Document 26: the refund of a diagnostic-lesson fee points at the income it returns (one refund per income).
+  refundOfCashTransactionId String? @unique
   paymentMethod     String?
   notes             String          @default("") @db.Text
 
@@ -889,6 +891,8 @@ model CashTransaction {
   relatedShopSale ShopSale?            @relation("ShopSaleCashTransactions", fields: [relatedShopSaleId], references: [id])
   relatedBooking  Booking?             @relation("BookingCashTransactions", fields: [relatedBookingId], references: [id], onDelete: SetNull)
   accountTransfer CashAccountTransfer? @relation(fields: [accountTransferId], references: [id], onDelete: SetNull)
+  refundOf        CashTransaction?     @relation("CashTransactionRefund", fields: [refundOfCashTransactionId], references: [id])
+  refundedBy      CashTransaction?     @relation("CashTransactionRefund")
 
   @@index([type, date(sort: Desc)])
   @@index([category, date(sort: Desc)])
@@ -1209,6 +1213,12 @@ model Booking {
   lossReason String?
   lossStage  String? // 'before_trial' | 'on_trial' | 'after_trial'
   lostAt     DateTime?
+
+  // Document 26: refund of the diagnostic-lesson fee (mirror of the cashbox expense; the expense is the source of truth).
+  trialRefundedAt          DateTime?
+  trialRefundedById        String?
+  trialRefundReason        String?  @db.Text
+  trialRefundOutsidePolicy Boolean  @default(false)
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

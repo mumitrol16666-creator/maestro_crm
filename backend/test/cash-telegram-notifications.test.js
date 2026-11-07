@@ -173,3 +173,20 @@ test('worker отправляет pending-уведомление и отмеча
     assert.equal(db.log.retryable, false);
     assert.ok(db.log.completedAt instanceof Date);
 });
+
+test('возврат диагностики уходит в Telegram расходом с понятной категорией', async () => {
+    const tx = makeTx();
+    const refund = await createCashTransaction(tx, {
+        type: 'expense',
+        amount: 2000,
+        category: 'trial_refund',
+        description: 'Возврат за диагностический урок: Анна Тестова',
+        paymentMethod: 'kaspi_pay',
+        createdById: 'admin-1',
+    });
+    assert.equal(tx.outbox.length, 1);
+    assert.equal(tx.outbox[0].idempotencyKey, `telegram:cash:${refund.id}`);
+    const text = formatCashTransactionNotification({ ...refund, createdBy: { name: 'Админ' } });
+    assert.match(text, /Расход из кассы/);
+    assert.match(text, /Категория: Возврат за диагностический урок/);
+});

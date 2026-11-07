@@ -69,3 +69,20 @@ test('невозвратную оплату диагностики нельзя 
         (error) => error.code === 'TRIAL_PAYMENT_NOT_REVERSIBLE' && error.statusCode === 400,
     );
 });
+
+test('приход с возвратом: «не оплачено» согласовано и ничего не делает', async () => {
+    const tx = makeTx({ id: 'cash-existing', amount: 2000, refundedBy: { id: 'cash-refund-1' } });
+    const operation = await syncTrialPayment(tx, { id: 'booking-1' }, { paid: false, actorId: 'admin-1' });
+    assert.equal(operation, null);
+    assert.equal(tx.calls.length, 0);
+});
+
+test('приход с возвратом: повторная отметка «оплачено» не создаёт второй приход', async () => {
+    const tx = makeTx({ id: 'cash-existing', amount: 2000, refundedBy: { id: 'cash-refund-1' } });
+    await assert.rejects(
+        syncTrialPayment(tx, { id: 'booking-1' }, { paid: true, actorId: 'admin-1' }),
+        (error) => error.code === 'TRIAL_PAYMENT_REFUNDED' && error.statusCode === 400 && /новую заявку/.test(error.message),
+    );
+    assert.equal(tx.calls.length, 0);
+    assert.equal(tx.notificationCalls.length, 0);
+});

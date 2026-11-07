@@ -108,6 +108,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         let paymentsTotal = 0;
         let trialPaymentsTotal = 0;
+        let trialRefundsTotal = 0;
         let correctionsTotal = 0;
         let reconciliationsTotal = 0;
         let manualIncome = 0;
@@ -119,6 +120,7 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
 
         let paymentsCount = 0;
         let trialPaymentsCount = 0;
+        let trialRefundsCount = 0;
         let manualIncomeCount = 0;
         let realExpensesCount = 0;
         let refundsCount = 0;
@@ -166,9 +168,14 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                     trialPaymentsTotal += amount;
                     trialPaymentsCount++;
                 }
-            } else if (tx.category === 'refund') {
+            } else if (tx.category === 'refund' || tx.category === 'trial_refund') {
+                // Возврат диагностики вычитается из прибыли тем же refundsTotal и не попадает в realExpenses.
                 refundsTotal += amount;
                 refundsCount++;
+                if (tx.category === 'trial_refund') {
+                    trialRefundsTotal += amount;
+                    trialRefundsCount++;
+                }
             } else if (tx.category === 'shop_sale') {
                 shopSalesTotal += amount;
                 shopSalesCount++;
@@ -205,6 +212,8 @@ router.get('/summary', authenticate, requireAdmin, async (req, res) => {
                 paymentsTotal,
                 trialPaymentsTotal,
                 trialPaymentsCount,
+                trialRefundsTotal,
+                trialRefundsCount,
                 paymentsCount,
                 manualIncome,
                 manualIncomeCount,
@@ -285,6 +294,22 @@ router.get('/transactions', authenticate, requireAdmin, async (req, res) => {
                     middleName: true,
                     phone: true,
                     direction: true,
+                },
+            },
+            // Возврат диагностики: строка расхода показывает клиента и ссылку на заявку через приход.
+            refundOf: {
+                select: {
+                    id: true,
+                    relatedBooking: {
+                        select: {
+                            id: true,
+                            name: true,
+                            lastName: true,
+                            middleName: true,
+                            phone: true,
+                            direction: true,
+                        },
+                    },
                 },
             },
         };

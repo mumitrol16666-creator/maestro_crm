@@ -10,7 +10,7 @@ const cases = [
  ['POST','/api/users/teachers','canCreateUsers'], ['DELETE','/api/users/person','canDeleteUsers'],
  ['PATCH','/api/users/person/change-role','canEditRoles'], ['GET','/api/activity-logs?entityType=students','canViewLogs'],
  ['POST','/api/integration-logs/event/retry','canViewLogs'], ['POST','/api/bookings/create-admin','canManageBookings'],
- ['PATCH','/api/bookings/id/trial-details','canManagePayments'], ['PATCH','/api/bookings/id/trial-details','canManageSchedule'],
+ ['PATCH','/api/bookings/id/trial-details','canManagePayments'], ['POST','/api/bookings/id/trial-refund','canManagePayments'], ['POST','/api/bookings/id/trial-refund','canManageSchedule'], ['PATCH','/api/bookings/id/trial-details','canManageSchedule'],
  ['POST','/api/bookings/id/convert','canManageStudents'], ['PUT','/api/students/id/schedule','canManageSchedule'],
  ['POST','/api/students/id/add-to-group','canManageGroups'], ['POST','/api/groups/id/students/student','canManageStudents'],
  ['PUT','/api/groups/id','canManageSchedule'], ['POST','/api/classes/id/approve','canManagePayments'],

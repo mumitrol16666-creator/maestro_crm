@@ -24,7 +24,10 @@ const {
     trialClassData,
 } = require('../services/trialPolicy');
 const { syncTrialPayment } = require('../services/trialPayment');
-const { buildTrialInvitation } = require('../services/trialInvitation');
+const { buildTrialInvitation, trialRefundMessage } = require('../services/trialInvitation');
+const { refundTrialPayment, trialRefundView } = require('../services/trialRefund');
+const { financialRequestKey, runFinancialRequest } = require('../services/financialRequest');
+const { syncOfflineLessonEventToLearningPlatform } = require('../services/learningPlatformNotifications');
 const { setTrialSheetGiven, trialSheetSnapshotForClass, TrialSheetError } = require('../services/trialSheet');
 const { isTrialReportV3 } = require('../services/trialReport');
 const {
@@ -47,6 +50,16 @@ const {
 } = require('../services/trialFunnel');
 
 const SCHOOL_TIME_ZONE = process.env.SCHOOL_TIME_ZONE || 'Asia/Aqtobe';
+
+// Document 26: the refund of the fee (if any) travels with the income row.
+const TRIAL_PAYMENT_SELECT = {
+    id: true,
+    amount: true,
+    type: true,
+    paymentMethod: true,
+    date: true,
+    refundedBy: { select: { id: true, date: true, paymentMethod: true } },
+};
 
 // Helper: normalize phone to digits
 function phoneDigits(phone) {
@@ -407,7 +420,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
                     trialManager: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
                     cashTransactions: {
                         where: { category: 'trial_payment', type: 'income' },
-                        select: { paymentMethod: true, date: true },
+                        select: TRIAL_PAYMENT_SELECT,
                         take: 1,
                     },
                 },
@@ -426,6 +439,7 @@ router.get('/', authenticate, requireSalesOrAdmin, async (req, res) => {
             trialManager: b.trialManager ? { ...b.trialManager, _id: b.trialManager.id } : null,
             trialPaymentMethod: b.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: b.cashTransactions?.[0]?.date || null,
+            ...trialRefundView(b, b.cashTransactions?.[0], req.user?.role),
             group: b.group ? { ...b.group, _id: b.group.id } : null,
         }));
 
@@ -517,7 +531,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 trialManager: { select: { id: true, name: true, lastName: true, middleName: true, role: true } },
                 cashTransactions: {
                     where: { category: 'trial_payment', type: 'income' },
-                    select: { paymentMethod: true, date: true },
+                    select: TRIAL_PAYMENT_SELECT,
                     take: 1,
                 },
             }
@@ -535,6 +549,7 @@ router.get('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
             trialManager: booking.trialManager ? { ...booking.trialManager, _id: booking.trialManager.id } : null,
             trialPaymentMethod: booking.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: booking.cashTransactions?.[0]?.date || null,
+            ...trialRefundView(booking, booking.cashTransactions?.[0], req.user?.role),
             group: booking.group ? { ...booking.group, _id: booking.group.id } : null,
         } });
     } catch (error) {
@@ -1206,6 +1221,81 @@ router.patch('/:id/trial-details', authenticate, requireSalesOrAdmin, async (req
     }
 });
 
+// POST /api/bookings/:id/trial-refund — возврат 2 000 ₸ за диагностический урок (документ 26).
+// Один возврат на приход: уникальный refundOfCashTransactionId + блокировки + ключ запроса.
+router.post('/:id/trial-refund', authenticate, requireAdmin, async (req, res) => {
+    try {
+        const requestKey = financialRequestKey(req);
+        const { reason, cancelledAt, overridePolicy, paymentMethod } = req.body || {};
+        if (typeof reason !== 'string'
+            || (cancelledAt != null && typeof cancelledAt !== 'string')
+            || (overridePolicy != null && typeof overridePolicy !== 'boolean')
+            || (paymentMethod != null && typeof paymentMethod !== 'string')) {
+            return res.status(400).json({ success: false, code: 'INVALID_REFUND_INPUT', error: 'Некорректные данные возврата' });
+        }
+
+        let afterCommit = null;
+        const outcome = await runFinancialRequest(prisma, {
+            key: requestKey,
+            actorId: req.user.id,
+            operation: 'booking:trial-refund',
+            payload: { bookingId: req.params.id, ...req.body },
+        }, async tx => {
+            const result = await refundTrialPayment(tx, {
+                bookingId: req.params.id,
+                actor: req.user,
+                reason,
+                cancelledAt: cancelledAt || null,
+                overridePolicy: Boolean(overridePolicy),
+                paymentMethod: paymentMethod || null,
+            });
+            afterCommit = result;
+            const amountText = result.refund.amount.toLocaleString('ru-RU');
+            return { status: 201, body: {
+                success: true,
+                refund: {
+                    id: result.refund.id,
+                    amount: result.refund.amount,
+                    date: result.refund.date,
+                    paymentMethod: result.refund.paymentMethod,
+                },
+                booking: { ...result.booking, _id: result.booking.id },
+                policy: result.policy,
+                classCancelled: result.classCancelled,
+                clientMessage: trialRefundMessage(result.booking),
+                message: `Возврат ${amountText} ₸ оформлен`,
+            } };
+        });
+
+        // The lesson disappears from the teacher's app. A platform failure never rolls the cashbox back.
+        if (!outcome.replayed && afterCommit?.classCancelled && afterCommit.classRecord) {
+            try {
+                await syncOfflineLessonEventToLearningPlatform('cancelled', afterCommit.classRecord, []);
+            } catch (error) {
+                console.error('[trial-refund] platform notification failed:', error.message);
+            }
+        }
+
+        res.status(outcome.status).json(outcome.body);
+    } catch (error) {
+        if (error.code === 'P2002') {
+            return res.status(409).json({
+                success: false,
+                code: 'TRIAL_PAYMENT_ALREADY_REFUNDED',
+                error: 'Оплата диагностики по этой заявке уже возвращена',
+            });
+        }
+        const status = error.statusCode || 500;
+        if (status >= 500) console.error('Trial refund error:', error);
+        res.status(status).json({
+            success: false,
+            code: error.code,
+            error: error.statusCode ? error.message : 'Не удалось оформить возврат',
+            ...(error.details ? error.details : {}),
+        });
+    }
+});
+
 // POST /api/bookings/:id/convert — create a student card from a booking.
 // Memberships and payments are deliberately created later from the student card.
 router.post('/:id/convert', authenticate, requireSalesOrAdmin, async (req, res) => {
@@ -1355,9 +1445,12 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
         }
 
         if (hardDelete) {
-            const [paymentsCount, membershipsCount, trialClass] = await Promise.all([
+            const [paymentsCount, membershipsCount, trialCashCount, trialClass] = await Promise.all([
                 prisma.payment.count({ where: { bookingId: booking.id } }),
                 prisma.membership.count({ where: { bookingId: booking.id } }),
+                prisma.cashTransaction.count({
+                    where: { relatedBookingId: booking.id, category: 'trial_payment' },
+                }),
                 booking.trialClassId
                     ? prisma.class.findUnique({ where: { id: booking.trialClassId }, select: { status: true } })
                     : null,
@@ -1367,6 +1460,14 @@ router.delete('/:id', authenticate, requireSalesOrAdmin, async (req, res) => {
                 return res.status(400).json({
                     success: false,
                     error: 'Нельзя полностью удалить заявку с платежами или абонементами. Переведите её в отказ, чтобы сохранить финансы.',
+                });
+            }
+
+            if (trialCashCount > 0) {
+                return res.status(400).json({
+                    success: false,
+                    code: 'BOOKING_HAS_TRIAL_PAYMENT',
+                    error: 'Нельзя удалить заявку с оплатой диагностики в кассе. Верните оплату или переведите заявку в отказ.',
                 });
             }
 

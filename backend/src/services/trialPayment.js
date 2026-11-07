@@ -3,6 +3,7 @@ const { PAYMENT_METHOD_VALUES } = require('./paymentMethods');
 const { createCashTransaction } = require('./cashTelegramNotifications');
 
 const TRIAL_PAYMENT_CATEGORY = 'trial_payment';
+const TRIAL_REFUND_CATEGORY = 'trial_refund';
 
 function trialBookingName(booking) {
     return [booking?.lastName, booking?.name, booking?.middleName]
@@ -31,8 +32,20 @@ async function syncTrialPayment(tx, booking, {
 
     const existing = await tx.cashTransaction.findUnique({
         where: { relatedBookingId: booking.id },
+        include: { refundedBy: { select: { id: true } } },
     });
     const nextPaid = Boolean(paid);
+
+    // Document 26: after a refund the money is gone and the booking is closed for
+    // payment. «Not paid» is consistent (nothing to do); «paid» would need a second
+    // income on the unique booking relation, so a new booking is required instead.
+    if (existing?.refundedBy) {
+        if (!nextPaid) return null;
+        const error = new Error('Оплата по этой заявке уже возвращена. Для новой записи создайте новую заявку');
+        error.code = 'TRIAL_PAYMENT_REFUNDED';
+        error.statusCode = 400;
+        throw error;
+    }
 
     if (!nextPaid) {
         if (existing) {
@@ -77,6 +90,8 @@ async function syncTrialPayment(tx, booking, {
 
 module.exports = {
     TRIAL_PAYMENT_CATEGORY,
+    TRIAL_REFUND_CATEGORY,
+    trialBookingName,
     trialPaymentDescription,
     syncTrialPayment,
 };

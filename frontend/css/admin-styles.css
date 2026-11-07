@@ -14245,6 +14245,28 @@ textarea.whatsapp-message-preview {
     .trial-invitation-message { min-height: 300px; }
     .trial-invitation-actions { grid-template-columns: 1fr; }
 }
+/* Возврат оплаты диагностики (документ 26) */
+.trial-refund-modal { max-height: calc(100vh - 32px); max-width: 560px !important; overflow-y: auto; padding: 30px !important; width: 100%; }
+.trial-refund-modal h2 { color: var(--admin-text); font-family: var(--font-main); font-size: 1.35rem; letter-spacing: 0; margin: 0 0 14px; padding-right: 42px; }
+.trial-refund-facts { display: grid; gap: 6px; margin: 0 0 16px; }
+.trial-refund-facts > div { display: grid; gap: 10px; grid-template-columns: 96px 1fr; }
+.trial-refund-facts dt { color: var(--ops-muted); font-size: .76rem; }
+.trial-refund-facts dd { color: var(--admin-text); font-size: .86rem; font-weight: 700; margin: 0; overflow-wrap: anywhere; }
+.trial-refund-modal input[type="datetime-local"], .trial-refund-modal input[type="text"], .trial-refund-modal select { min-height: 44px; width: 100%; }
+.trial-refund-rule { border-radius: 10px; font-size: .82rem; font-weight: 800; line-height: 1.4; margin: 0 0 12px; padding: 10px 12px; }
+.trial-refund-rule.is-ok { background: rgba(88,216,149,.12); border: 1px solid rgba(88,216,149,.35); color: #58d895; }
+.trial-refund-rule.is-warning { background: rgba(245,158,11,.12); border: 1px solid rgba(245,158,11,.38); color: #fbbf24; }
+.trial-refund-override { align-items: center; display: flex; gap: 10px; margin: 0 0 14px; min-height: 44px; }
+.trial-refund-override[hidden] { display: none; }
+.trial-refund-override input { height: 20px; margin: 0; width: 20px; }
+.trial-refund-hint { color: var(--ops-muted); font-size: .76rem; line-height: 1.5; margin: 4px 0 14px; }
+.trial-refund-submit { min-height: 44px; width: 100%; }
+.trial-refund-submit:disabled { cursor: not-allowed; opacity: .45; }
+.booking-card-sheet-actions button.is-danger { border-color: rgba(220,53,69,.55); color: #ff8a96; min-height: 44px; }
+@media (max-width: 640px) {
+    .trial-refund-modal { padding: 24px 16px 18px !important; }
+    .trial-refund-facts > div { grid-template-columns: 1fr; gap: 2px; }
+}
 .schedule-daily-sheet-btn { align-items: center; display: inline-flex; gap: 7px; }
 .schedule-daily-sheet-btn svg,
 .daily-schedule-print-btn svg { fill: none; height: 17px; stroke: currentColor; stroke-linecap: round; stroke-linejoin: round; stroke-width: 1.8; width: 17px; }

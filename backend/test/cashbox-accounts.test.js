@@ -152,3 +152,18 @@ test('фильтр кассы принимает только настроенн
     assert.equal(isCashboxPaymentMethodFilter('unspecified'), true);
     assert.equal(isCashboxPaymentMethodFilter('bank_card'), false);
 });
+
+test('возврат диагностики уменьшает тот же счёт, что и приход', () => {
+    const accounts = buildCashboxAccountSummary([
+        { type: 'income', amount: 2000, category: 'trial_payment', paymentMethod: 'kaspi_pay' },
+        { type: 'expense', amount: 2000, category: 'trial_refund', paymentMethod: 'kaspi_pay' },
+        { type: 'income', amount: 2000, category: 'trial_payment', paymentMethod: 'cash' },
+        { type: 'expense', amount: 2000, category: 'trial_refund', paymentMethod: 'cash' },
+    ]);
+    const kaspi = accounts.find(account => account.paymentMethod === 'kaspi_pay');
+    const cash = accounts.find(account => account.paymentMethod === 'cash');
+    assert.equal(kaspi.income, 2000);
+    assert.equal(kaspi.expense, 2000);
+    assert.equal(kaspi.currentBalance, 0);
+    assert.equal(cash.currentBalance, 0);
+});

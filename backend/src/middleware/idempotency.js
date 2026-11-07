@@ -14,6 +14,8 @@ const createIdempotencyMiddleware = (db = prisma, authenticateUser = authenticat
     if (/^\/api\/(?:enrollments|subscription-periods|document-scans)(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/payments(?:\/|\?|$)/i.test(requestPath)) return next();
     if (/^\/api\/students\/[^/]+\/balance-adjustment\/?(?:\?|$)/i.test(requestPath)) return next();
+    // The trial-fee refund owns its outcome the same way (FinancialRequest, committed with the cashbox expense).
+    if (/^\/api\/bookings\/[^/]+\/trial-refund\/?(?:\?|$)/i.test(requestPath)) return next();
     // Never replay credentials or login results. These paths must execute their
     // own current-password, rate-limit and account checks on every request.
     if (/^\/api\/auth(?:\/|\?|$)/i.test(requestPath)

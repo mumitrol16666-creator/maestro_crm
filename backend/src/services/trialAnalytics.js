@@ -210,6 +210,7 @@ function emptySourceRow(booking) {
         noShow: 0,
         diagnosticPaid: 0,
         diagnosticRevenue: 0,
+        diagnosticRefunded: 0,
     };
 }
 
@@ -282,7 +283,10 @@ function buildTrialAnalytics(bookings = [], classesById = new Map()) {
         const trialPayment = (booking.cashTransactions || []).find((item) => (
             item.type === 'income' && item.category === 'trial_payment'
         ));
-        if (trialPayment) {
+        if (trialPayment?.refundedBy) {
+            // Возвращённая оплата не считается оплаченной диагностикой (документ 26).
+            sourceRow.diagnosticRefunded += 1;
+        } else if (trialPayment) {
             sourceRow.diagnosticPaid += 1;
             sourceRow.diagnosticRevenue += Math.max(0, Number(trialPayment.amount) || 0);
         }

@@ -18,6 +18,7 @@ const CATEGORY_LABELS = Object.freeze({
     payment: 'Оплата обучения',
     trial_payment: 'Диагностический урок',
     refund: 'Возврат',
+    trial_refund: 'Возврат за диагностический урок',
     deletion: 'Удаление платежа',
     salary: 'Зарплата',
     salary_advance: 'Аванс',

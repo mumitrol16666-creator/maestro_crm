@@ -87,9 +87,35 @@ function buildTrialInvitation(booking) {
     };
 }
 
+/**
+ * Document 26, section 7: the message the admin sends by hand after a refund.
+ * The credit period is deliberately not promised. Without a lesson date the
+ * date line is dropped.
+ */
+function trialRefundMessage(booking) {
+    const scheduled = booking?.trialScheduledAt ? formatTrialDateTime(booking.trialScheduledAt) : null;
+    const clientName = String(booking?.name || '').trim();
+    const greeting = clientName ? `Здравствуйте, ${clientName}!` : 'Здравствуйте!';
+    const phone = whatsappPhoneDigits(booking?.phone);
+    const cancelled = scheduled
+        ? `Запись на диагностический урок ${scheduled.date}, ${scheduled.time} отменена.`
+        : 'Запись на диагностический урок отменена.';
+    const message = [
+        `${greeting} ${cancelled}`,
+        `${TRIAL_LESSON_PRICE.toLocaleString('ru-RU')} ₸ вернём на Kaspi, с которого была оплата.`,
+        'Если захотите записаться снова, напишите нам в этот чат.',
+    ].join(' ');
+    return {
+        message,
+        phone,
+        whatsappUrl: phone ? `https://wa.me/${phone}?text=${encodeURIComponent(message)}` : '',
+    };
+}
+
 module.exports = {
     SCHOOL_ADDRESS,
     buildTrialInvitation,
+    trialRefundMessage,
     formatTrialDateTime,
     normalizeExternalUrl,
     whatsappPhoneDigits,

@@ -41,6 +41,7 @@ const {
 const { loadLessonRosterState, validateLessonSubmission } = require('../services/lessonSubmissionPolicy');
 const { getTrialParticipantId, isTrialParticipantId } = require('../services/trialParticipant');
 const { syncTrialPayment } = require('../services/trialPayment');
+const { trialRefundView } = require('../services/trialRefund');
 const { buildTrialSheetForClass, TrialSheetError } = require('../services/trialSheet');
 const { defaultTrialNextAction, trialNextActionAfterHeld, stageIsPastHeld } = require('../services/trialFunnel');
 const { findTrialBookingForClass, isTrialClass, isVirtualTrialClass } = require('../services/trialClass');
@@ -60,6 +61,16 @@ const {
     findRecurringConflicts,
 } = require('../services/regularScheduleAutomation');
 const { classifyCancellation } = require('../services/cancellationPolicy');
+
+// Document 26: the refund of the diagnostic fee (if any) travels with the income row.
+const TRIAL_PAYMENT_SELECT = {
+    id: true,
+    amount: true,
+    type: true,
+    paymentMethod: true,
+    date: true,
+    refundedBy: { select: { id: true, date: true, paymentMethod: true } },
+};
 
 // In-memory store for schedule generation progress (per backend instance).
 // Each entry lives for JOB_TTL_MS after completion and is then removed.
@@ -890,9 +901,11 @@ router.get('/', authenticate, async (req, res) => {
                     depositPaid: true,
                     status: true,
                     convertedToStudentId: true,
+                    trialRefundReason: true,
+                    trialRefundOutsidePolicy: true,
                     cashTransactions: {
                         where: { category: 'trial_payment', type: 'income' },
-                        select: { paymentMethod: true, date: true },
+                        select: TRIAL_PAYMENT_SELECT,
                         take: 1,
                     },
                 },
@@ -935,6 +948,7 @@ router.get('/', authenticate, async (req, res) => {
                 depositPaid: Boolean(trialBooking?.depositPaid),
                 trialPaymentMethod: trialBooking?.cashTransactions?.[0]?.paymentMethod || null,
                 trialPaymentDate: trialBooking?.cashTransactions?.[0]?.date || null,
+                ...trialRefundView(trialBooking, trialBooking?.cashTransactions?.[0], req.user?.role),
                 trialBooking: trialBooking
                     ? {
                         ...trialBooking,
@@ -1654,9 +1668,11 @@ router.get('/:id', authenticate, async (req, res) => {
                 status: true,
                 depositPaid: true,
                 convertedToStudentId: true,
+                trialRefundReason: true,
+                trialRefundOutsidePolicy: true,
                 cashTransactions: {
                     where: { category: 'trial_payment', type: 'income' },
-                    select: { paymentMethod: true, date: true },
+                    select: TRIAL_PAYMENT_SELECT,
                     take: 1,
                 },
             },
@@ -1682,6 +1698,7 @@ router.get('/:id', authenticate, async (req, res) => {
             depositPaid: Boolean(trialBooking?.depositPaid),
             trialPaymentMethod: trialBooking?.cashTransactions?.[0]?.paymentMethod || null,
             trialPaymentDate: trialBooking?.cashTransactions?.[0]?.date || null,
+            ...trialRefundView(trialBooking, trialBooking?.cashTransactions?.[0], req.user?.role),
             trialParticipant: trialBooking && !cls.individualStudentId
                 ? {
                     id: getTrialParticipantId(cls.id),

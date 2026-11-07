@@ -28,8 +28,9 @@ function formatBookingFio(person) {
         .join(' ');
 }
 
-function showTrialInvitation(invitation) {
+function showTrialInvitation(invitation, copy = {}) {
     if (!invitation?.message) return;
+    const eyebrow = copy.eyebrow || 'Пробный урок назначен';
 
     const overlay = document.createElement('div');
     overlay.className = 'modal-overlay active trial-invitation-overlay';
@@ -37,7 +38,7 @@ function showTrialInvitation(invitation) {
     overlay.innerHTML = `
         <div class="modal-content trial-invitation-modal" role="dialog" aria-modal="true" aria-labelledby="trialInvitationTitle">
             <button class="modal-close" type="button" data-trial-invitation-close aria-label="Закрыть">×</button>
-            <span class="trial-invitation-eyebrow">Пробный урок назначен</span>
+            <span class="trial-invitation-eyebrow">${escapeBookingText(eyebrow)}</span>
             <h2 id="trialInvitationTitle">Сообщение клиенту готово</h2>
             <p class="trial-invitation-lead">Проверьте текст, при необходимости отредактируйте и отправьте его в WhatsApp.</p>
             <textarea class="trial-invitation-message" aria-label="Текст сообщения клиенту">${escapeBookingText(invitation.message)}</textarea>
@@ -67,6 +68,171 @@ function showTrialInvitation(invitation) {
         window.open(`https://wa.me/${invitation.phone}?text=${encodeURIComponent(messageField.value)}`, '_blank', 'noopener');
     });
 }
+
+// ---- Возврат оплаты диагностики (документ 26) ----
+const TRIAL_REFUND_POLICY_HOURS = 24;
+
+function trialRefundShortDate(value) {
+    return value ? new Date(value).toLocaleDateString('ru-RU', { day: '2-digit', month: '2-digit' }) : '';
+}
+
+// Состояние оплаты диагностики для карточки и списка заявок.
+function bookingTrialPaymentView(booking) {
+    if (booking.trialRefund) {
+        const account = getPaymentMethodLabel(booking.trialRefund.paymentMethod);
+        return {
+            text: `Возвращена ${trialRefundShortDate(booking.trialRefund.date)}${account ? ` · ${account}` : ''}`,
+            className: 'is-warning',
+            short: 'возвращена',
+            shortClass: 'is-unpaid',
+        };
+    }
+    if (booking.depositPaid) {
+        const account = getPaymentMethodLabel(booking.trialPaymentMethod);
+        const details = [account, trialRefundShortDate(booking.trialPaymentDate)].filter(Boolean).join(' · ');
+        return { text: `Оплачена${details ? ` · ${details}` : ''}`, className: 'is-success', short: 'оплачена', shortClass: 'is-paid' };
+    }
+    return { text: 'Не оплачена', className: 'is-warning', short: 'не оплачена', shortClass: 'is-unpaid' };
+}
+
+function trialRefundPlural(count, one, few, many) {
+    const n = Math.abs(count) % 100;
+    const last = n % 10;
+    if (n > 10 && n < 20) return many;
+    if (last > 1 && last < 5) return few;
+    return last === 1 ? one : many;
+}
+
+// То же правило, что на сервере: ровно 24 часа и больше — по правилу. Сервер перепроверяет.
+function trialRefundRule(trialScheduledAt, cancelledAt) {
+    if (!trialScheduledAt) return { withinPolicy: true, text: 'Урок не назначен — возврат по правилу' };
+    const diff = new Date(trialScheduledAt).getTime() - new Date(cancelledAt).getTime();
+    if (Number.isNaN(diff)) return { withinPolicy: false, text: 'Укажите, когда клиент отменил запись' };
+    const hours = Math.floor(diff / 3600000);
+    if (diff >= TRIAL_REFUND_POLICY_HOURS * 3600000) {
+        const days = Math.floor(hours / 24);
+        const before = hours >= 48
+            ? `${days} ${trialRefundPlural(days, 'день', 'дня', 'дней')}`
+            : `${hours} ${trialRefundPlural(hours, 'час', 'часа', 'часов')}`;
+        return { withinPolicy: true, text: `Отменено за ${before} до урока — по правилу` };
+    }
+    if (hours < 0) return { withinPolicy: false, text: 'Урок уже прошёл — возврат вне правила' };
+    if (hours === 0) return { withinPolicy: false, text: 'До урока осталось меньше часа — возврат вне правила' };
+    return { withinPolicy: false, text: `До урока осталось ${hours} ${trialRefundPlural(hours, 'час', 'часа', 'часов')} — возврат вне правила` };
+}
+
+function trialRefundLocalInput(date = new Date()) {
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
+// Окно подтверждения возврата. onDone вызывается после успешного возврата.
+function openTrialRefundDialog(booking, onDone) {
+    const fullName = formatBookingFio(booking) || 'Клиент';
+    const lessonText = booking.trialScheduledAt
+        ? new Date(booking.trialScheduledAt).toLocaleString('ru-RU', { timeZone: 'Asia/Aqtobe', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })
+        : 'не назначен';
+    const paidAccount = getPaymentMethodLabel(booking.trialPaymentMethod);
+    const paidText = [trialRefundShortDate(booking.trialPaymentDate), paidAccount].filter(Boolean).join(', ') || 'дата не указана';
+    const lessonPassed = ['held', 'analysis_ready', 'sheet_given', 'contacted', 'thinking', 'sold'].includes(booking.trialFunnelStage);
+    const nowValue = trialRefundLocalInput();
+
+    const overlay = document.createElement('div');
+    overlay.className = 'modal-overlay active trial-refund-overlay';
+    overlay.style.zIndex = '10040';
+    overlay.innerHTML = `
+        <div class="modal-content trial-refund-modal" role="dialog" aria-modal="true" aria-labelledby="trialRefundTitle">
+            <button class="modal-close" type="button" data-trial-refund-close aria-label="Закрыть">×</button>
+            <span class="trial-invitation-eyebrow">Возврат оплаты</span>
+            <h2 id="trialRefundTitle">Вернуть 2 000 ₸ за диагностический урок</h2>
+            <dl class="trial-refund-facts">
+                <div><dt>Клиент</dt><dd>${escapeBookingText(fullName)}${booking.phone ? `, ${escapeBookingText(booking.phone)}` : ''}</dd></div>
+                <div><dt>Урок</dt><dd>${escapeBookingText(lessonText)}</dd></div>
+                <div><dt>Оплачено</dt><dd>${escapeBookingText(paidText)}</dd></div>
+            </dl>
+            <form id="trialRefundForm" novalidate>
+                <div class="form-group">
+                    <label for="trialRefundCancelledAt">Когда клиент отменил</label>
+                    <input id="trialRefundCancelledAt" type="datetime-local" value="${nowValue}" max="${nowValue}" required>
+                </div>
+                <p class="trial-refund-rule" id="trialRefundRule" role="status"></p>
+                <label class="trial-refund-override" id="trialRefundOverrideRow" hidden>
+                    <input type="checkbox" id="trialRefundOverride">
+                    <span>Вернуть вне правила</span>
+                </label>
+                <div class="form-group">
+                    <label for="trialRefundReason">Причина <small>(обязательно, до 200 знаков)</small></label>
+                    <input id="trialRefundReason" type="text" maxlength="200" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="trialRefundMethod">Счёт возврата</label>
+                    <select id="trialRefundMethod" class="admin-select">
+                        ${renderPaymentMethodOptions(booking.trialPaymentMethod || '', { emptyLabel: 'Тот же счёт, что при оплате' })}
+                    </select>
+                </div>
+                <p class="trial-refund-hint">${lessonPassed
+                    ? 'Урок уже проведён: статус заявки не изменится.'
+                    : 'Урок будет отменён, заявка перейдёт в «Отклонено» с причиной потери до пробного. Для новой записи создайте новую заявку.'}</p>
+                <button class="btn-primary trial-refund-submit" id="trialRefundSubmit" type="submit">Вернуть 2 000 ₸</button>
+            </form>
+        </div>
+    `;
+    document.body.appendChild(overlay);
+
+    const close = () => overlay.remove();
+    const cancelledInput = overlay.querySelector('#trialRefundCancelledAt');
+    const ruleLine = overlay.querySelector('#trialRefundRule');
+    const overrideRow = overlay.querySelector('#trialRefundOverrideRow');
+    const overrideBox = overlay.querySelector('#trialRefundOverride');
+    const reasonInput = overlay.querySelector('#trialRefundReason');
+    const submit = overlay.querySelector('#trialRefundSubmit');
+    let sending = false;
+
+    const refresh = () => {
+        const rule = trialRefundRule(booking.trialScheduledAt, cancelledInput.value ? new Date(cancelledInput.value) : NaN);
+        ruleLine.textContent = rule.text;
+        ruleLine.className = `trial-refund-rule ${rule.withinPolicy ? 'is-ok' : 'is-warning'}`;
+        overrideRow.hidden = rule.withinPolicy;
+        if (rule.withinPolicy) overrideBox.checked = false;
+        submit.disabled = sending || !cancelledInput.value || !reasonInput.value.trim() || (!rule.withinPolicy && !overrideBox.checked);
+    };
+    [cancelledInput, overrideBox, reasonInput].forEach(el => el.addEventListener('input', refresh));
+    overrideBox.addEventListener('change', refresh);
+    refresh();
+
+    overlay.querySelector('[data-trial-refund-close]').addEventListener('click', close);
+    overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+    overlay.querySelector('#trialRefundForm').addEventListener('submit', async event => {
+        event.preventDefault();
+        if (submit.disabled) return;
+        sending = true;
+        submit.disabled = true;
+        submit.textContent = 'Возвращаем...';
+        try {
+            const response = await fetch(`${API_URL}/bookings/${booking.id || booking._id}/trial-refund`, {
+                method: 'POST',
+                headers: { Authorization: `Bearer ${getAuthToken()}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    reason: reasonInput.value.trim(),
+                    cancelledAt: new Date(cancelledInput.value).toISOString(),
+                    overridePolicy: overrideBox.checked,
+                    paymentMethod: overlay.querySelector('#trialRefundMethod').value || undefined,
+                }),
+            });
+            const result = await response.json();
+            if (!response.ok || !result.success) throw new Error(result.error || 'Не удалось оформить возврат');
+            close();
+            toast.success(result.message || 'Возврат 2 000 ₸ оформлен');
+            if (typeof onDone === 'function') await onDone(result);
+            showTrialInvitation(result.clientMessage, { eyebrow: 'Оплата диагностики возвращена' });
+        } catch (error) {
+            toast.error(error.message);
+            sending = false;
+            submit.textContent = 'Вернуть 2 000 ₸';
+            refresh();
+        }
+    });
+}
+window.openTrialRefundDialog = openTrialRefundDialog;
 
 function getAppBookingStatusText(status) {
     return ({
@@ -511,6 +677,11 @@ function bookingCardTimeline(booking) {
             title: 'Лист первого занятия отдан',
             text: '',
         },
+        booking.trialRefund && {
+            date: booking.trialRefund.date,
+            title: 'Оплата диагностики возвращена',
+            text: [booking.trialRefund.reason, booking.trialRefund.outsidePolicy ? 'вне правила' : ''].filter(Boolean).join(' · '),
+        },
         booking.trialLastContactAt && {
             date: booking.trialLastContactAt,
             title: 'Последний контакт',
@@ -643,6 +814,7 @@ async function openBookingCard(bookingId) {
             : (booking.trialManager ? [booking.trialManager] : []);
         const selectedAction = getBookingNextAction(booking, stage);
         const nextStep = bookingNextStep(booking);
+        const paymentView = bookingTrialPaymentView(booking);
         const overdue = bookingFunnelIsOverdue(booking);
         const phoneDigits = String(booking.phone || '').replace(/\D/g, '').replace(/^8/, '7');
         const whatsappUrl = phoneDigits ? `https://wa.me/${phoneDigits}` : '';
@@ -706,9 +878,14 @@ async function openBookingCard(bookingId) {
                                     <div><dt>Дата и время</dt><dd>${escapeBookingText(booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначены')}</dd></div>
                                     <div><dt>Преподаватель</dt><dd>${escapeBookingText(booking.trialTeacherName || 'Не назначен')}</dd></div>
                                     <div><dt>Кабинет</dt><dd>${escapeBookingText(booking.trialRoomName || 'Не назначен')}</dd></div>
-                                    <div><dt>Оплата</dt><dd class="${booking.depositPaid ? 'is-success' : 'is-warning'}">${booking.depositPaid ? 'Оплачена' : 'Не оплачена'}</dd></div>
+                                    <div><dt>Оплата</dt><dd class="${paymentView.className}">${escapeBookingText(paymentView.text)}</dd></div>
+                                    ${booking.trialRefund && booking.trialRefund.reason ? `<div><dt>Причина возврата</dt><dd>${escapeBookingText(booking.trialRefund.reason)}${booking.trialRefund.outsidePolicy ? ' · вне правила' : ''}</dd></div>` : ''}
                                     ${booking.trialSheetAvailable ? `<div><dt>Лист первого занятия</dt><dd class="${booking.trialSheetGivenAt ? 'is-success' : 'is-warning'}" data-booking-card-sheet-state>${booking.trialSheetGivenAt ? `Отдан ${escapeBookingText(formatDateTime(booking.trialSheetGivenAt))}` : 'Не отдан'}</dd></div>` : ''}
                                 </dl>
+                                ${booking.trialRefundAvailable ? `
+                                    <div class="booking-card-sheet-actions">
+                                        <button type="button" class="is-danger" data-booking-card-refund>Вернуть оплату</button>
+                                    </div>` : ''}
                                 ${booking.trialSheetAvailable && canManage ? `
                                     <div class="booking-card-sheet-actions">
                                         <button type="button" data-booking-card-sheet-print>Печать листа</button>
@@ -830,6 +1007,13 @@ async function openBookingCard(bookingId) {
             close();
             openTrialDetails(bookingId);
         });
+        overlay.querySelector('[data-booking-card-refund]')?.addEventListener('click', () => {
+            openTrialRefundDialog(booking, async () => {
+                close();
+                await renderBookings(currentBookingFilter, currentBookingSearch, currentBookingPage);
+                openBookingCard(bookingId);
+            });
+        });
         overlay.querySelector('[data-booking-card-sheet-print]')?.addEventListener('click', () => {
             if (typeof printTrialSheet === 'function') printTrialSheet(booking.trialClassId);
         });
@@ -936,7 +1120,7 @@ function bookingNextStep(booking) {
     if (!booking.trialScheduledAt && !booking.externalSourceId) {
         return { tone: 'warning', title: 'Пробный', text: 'Без даты пробного заявка зависнет.' };
     }
-    if (booking.trialScheduledAt && !booking.depositPaid) {
+    if (booking.trialScheduledAt && !booking.depositPaid && !booking.trialRefund) {
         return { tone: 'warning', title: 'Оплата?', text: 'Диагностический урок назначен, оплата 2000 ₸ не отмечена.' };
     }
     if (booking.trialScheduledAt && booking.depositPaid) {
@@ -997,7 +1181,7 @@ function renderBookingConversionChecklist(booking) {
         ['Телефон', Boolean(booking.phone), 'без телефона ученик не сможет нормально получать напоминания'],
         ['Направление', Boolean(booking.direction), 'нужно для группы, тарифа и аналитики'],
         ['Пробный урок', Boolean(booking.trialScheduledAt), 'лучше конвертировать после назначенного или проведённого пробного'],
-        ['Оплата диагностики', Boolean(booking.depositPaid), 'отметьте оплату 2000 ₸ до создания ученика'],
+        ['Оплата диагностики', Boolean(booking.depositPaid), booking.trialRefund ? 'оплата возвращена клиенту' : 'отметьте оплату 2000 ₸ до создания ученика'],
         ['Источник', Boolean(booking.source), 'важно для аналитики продаж'],
     ];
     return `
@@ -1096,7 +1280,7 @@ async function renderBookings(filter = null, search = '', page = 1) {
                         <strong>${booking.trialScheduledAt ? formatDateTime(booking.trialScheduledAt) : 'Не назначен'}</strong>
                         ${booking.trialTeacherName ? `<span>${escapeBookingText(booking.trialTeacherName)}</span>` : ''}
                         ${booking.trialRoomName ? `<span>${escapeBookingText(booking.trialRoomName)}</span>` : ''}
-                        <em class="${booking.depositPaid ? 'is-paid' : 'is-unpaid'}">Диагностика: ${booking.depositPaid ? 'оплачена' : 'не оплачена'}</em>
+                        <em class="${bookingTrialPaymentView(booking).shortClass}">Диагностика: ${bookingTrialPaymentView(booking).short}</em>
                         ${canManageBookings ? `<button class="table-btn" type="button" onclick="openTrialDetails(${jsBookingArg(booking._id)})">${booking.trialScheduledAt ? 'Изменить пробный' : 'Назначить пробный'}</button>` : ''}
                     </div>
                 </div>
@@ -1602,6 +1786,9 @@ async function openTrialDetails(bookingId) {
                         <input id="trialDetailsScheduledAt" type="datetime-local" value="${scheduledValue}">
                         <small style="opacity:.7;display:block;margin-top:5px;">Длительность — 30 минут. Урок сразу появится в расписании и приложении преподавателя.</small>
                     </div>
+                    ${booking.trialRefund ? `
+                    <p class="trial-refund-rule is-warning" id="trialDetailsRefunded">Оплата диагностики возвращена ${escapeBookingText(trialRefundShortDate(booking.trialRefund.date))}. Для новой записи создайте новую заявку.</p>
+                    ` : `
                     <label class="attendance-present-toggle" style="justify-content:flex-start;margin-bottom:18px;">
                         <input type="checkbox" id="trialDetailsDeposit" ${booking.depositPaid ? 'checked' : ''}>
                         <span>Диагностический урок 2000 ₸ оплачен</span>
@@ -1614,7 +1801,7 @@ async function openTrialDetails(bookingId) {
                                 : '<option value="">Не указан</option><option value="cash">Наличные</option><option value="kaspi_pay">КаспиПей</option><option value="freedom">Фридом</option><option value="halyk">Халык Банк</option>'}
                         </select>
                         <small style="opacity:.7;display:block;margin-top:5px;">Оплата фиксируется в кассе и не пополняет баланс ученика.</small>
-                    </div>
+                    </div>`}
                     <button class="btn-primary" type="submit" style="width:100%;">Сохранить пробный</button>
                 </form>
             </div>
@@ -1636,7 +1823,8 @@ async function openTrialDetails(bookingId) {
                         teacherId: overlay.querySelector('#trialDetailsTeacher').value || null,
                         roomId: overlay.querySelector('#trialDetailsRoom').value || null,
                         scheduledAt: value ? new Date(value).toISOString() : null,
-                        depositPaid: overlay.querySelector('#trialDetailsDeposit').checked,
+                        // После возврата оплату не отправляем: касса и отметка уже закрыты.
+                        depositPaid: overlay.querySelector('#trialDetailsDeposit')?.checked,
                         trialPaymentMethod: overlay.querySelector('#trialDetailsPaymentMethod')?.value || undefined,
                     }),
                 });

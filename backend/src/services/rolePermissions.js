@@ -107,7 +107,7 @@ function requiredPermissions(req, targetRole) {
     if (resource === 'bookings' && parts[3]) {
         add('canManageBookings');
         if (action === 'convert') add('canManageStudents', 'canManageSchedule', 'canCreateUsers');
-        if (action === 'trial-details' || parts[3] === 'create-admin' || req.method === 'DELETE') add('canManagePayments', 'canManageSchedule');
+        if (['trial-details', 'trial-refund'].includes(action) || parts[3] === 'create-admin' || req.method === 'DELETE') add('canManagePayments', 'canManageSchedule');
         if (['online-schedule', 'status', 'data-quality'].includes(action)) add('canManageSchedule');
     }
     if (resource === 'admin' && parts[3] === 'membership-actions') add('canManageStudents', 'canManagePayments');
